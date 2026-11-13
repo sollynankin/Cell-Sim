@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cell gallery</title>
+<style>
+  body { margin: 0; background: #fbfaf6; font-family: Georgia, serif; color: #1c1c20; }
+  h1 { text-align: center; font-weight: 600; margin: 18px 0 4px; font-size: 30px; }
+  p.sub { text-align: center; margin: 0 0 8px; color: #666; font-size: 13px; font-family: system-ui, sans-serif; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 6px 10px; padding: 6px 18px 30px; }
+  figure { margin: 0; text-align: center; min-width: 0; }
+  figcaption { font-size: 20px; margin-top: 2px; }
+  figcaption small { display: block; font: 12px system-ui, sans-serif; color: #777; margin-top: 2px; }
+  canvas { display: block; margin: 0 auto; width: 100%; max-width: 640px; height: auto; }
+  body.single canvas { max-width: 100%; }
+  body.single h1, body.single p.sub { display: none; }
+</style>
+</head>
+<body>
+<h1>Cells grown from genomes</h1>
+<p class="sub">Every structure below is produced by develop(genome). No cell type is hard-coded in the drawing.</p>
+<div id="grid"></div>
+<script type="module" src="gallery.js"></script>
+</body>
+</html>
