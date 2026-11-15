@@ -179,7 +179,9 @@ export function drawCell(ctx, P, state, u, opts = {}) {
       x += Math.cos(ph) * ds; y += Math.sin(ph) * ds;
       ctx.lineTo(x, y);
     }
+    if (lod >= 2) { ctx.lineWidth = (P.euk ? 4.6 : 5.4) * px; ctx.lineCap = 'round'; ctx.strokeStyle = hsl(P.euk ? pal.h : 42, 40, 60, 0.16); ctx.stroke(); }
     ctx.lineWidth = (P.euk ? 1.9 : 2.6) * px; ctx.lineCap = 'round'; ctx.strokeStyle = pal.flag; ctx.stroke();
+    if (lod >= 2) { ctx.beginPath(); ctx.arc(flagBase.x, by, 2.2 * px, 0, TAU); ctx.fillStyle = hsl(P.euk ? pal.h : 30, 55, 36); ctx.fill(); }
     if (lod >= 2 && !P.euk) { ctx.lineWidth = 0.8 * px; ctx.strokeStyle = hsl(40, 80, 82); ctx.stroke(); }
   });
   if (P.flagella.length && i2(lod)) addPart(P.euk ? 'Flagella' : 'Flagella', P.euk ? P.a * 1.3 : -P.a * 1.4, 0);
@@ -217,8 +219,14 @@ export function drawCell(ctx, P, state, u, opts = {}) {
   ctx.fillStyle = g; ctx.fill();
   ctx.save(); ctx.clip();
 
+  // cytoplasm texture: faint granules, drifting slowly
+  if (lod >= 3) {
+    const gr = mulberry32(((state.seed || 1) * 7919) >>> 0); ctx.fillStyle = hsl(pal.h, 40, 45, 0.11);
+    for (let k = 0; k < 90; k++) { const x = (gr() * 2 - 1) * P.a, y = (gr() * 2 - 1) * P.b; ctx.beginPath(); ctx.arc(x + Math.sin(t * 0.3 + k) * 0.01, y + Math.cos(t * 0.27 + k) * 0.01, (0.4 + 1.6 * gr()) * px, 0, TAU); ctx.fill(); }
+  }
   // organelles are clipped to the body
   drawInterior(ctx, P, L, pts, pal, state, u, lod, t, parts);
+  if (lod >= 2) { trace(ctx, pts); ctx.lineWidth = Math.max(7 * px, 0.14 * Math.min(P.a, P.b)); ctx.strokeStyle = hsl(pal.h, 45, 40, 0.14); ctx.stroke(); }   // inner rim shading for depth
   ctx.restore();
 
   if (wallPx) {
@@ -226,6 +234,7 @@ export function drawCell(ctx, P, state, u, opts = {}) {
     if (lod >= 2) { trace(ctx, pts, 1 - (wallPx * 0.5 * px) / Math.max(0.2, P.b)); ctx.lineWidth = 1.2 * px; ctx.strokeStyle = pal.wallIn; ctx.stroke(); }
     if (lod >= 2) addPart(P.euk ? 'Cell wall' : 'Cell wall', pts[Math.floor(N * 0.12)].x, pts[Math.floor(N * 0.12)].y);
   } else {
+    if (lod >= 2) { trace(ctx, pts); ctx.lineWidth = 4.5 * px; ctx.strokeStyle = hsl(pal.h, 40, 60, 0.18); ctx.lineJoin = 'round'; ctx.stroke(); }
     trace(ctx, pts); ctx.lineWidth = 1.6 * px; ctx.strokeStyle = pal.edge; ctx.lineJoin = 'round'; ctx.stroke();
   }
   // soft gloss
@@ -266,7 +275,9 @@ function drawInterior(ctx, P, L, pts, pal, state, u, lod, t, parts) {
     ctx.beginPath(); ctx.moveTo(outer[0].x, outer[0].y);
     outer.forEach((p) => ctx.lineTo(p.x, p.y));
     for (let k = inner.length - 1; k >= 0; k--) ctx.lineTo(inner[k].x, inner[k].y);
-    ctx.closePath(); ctx.fillStyle = 'hsl(98,52%,52%)'; ctx.fill();
+    ctx.closePath();
+    { const cg = ctx.createRadialGradient(0, 0, 0.1, 0, 0, Math.max(P.a, P.b)); cg.addColorStop(0, 'hsl(96,50%,44%)'); cg.addColorStop(1, 'hsl(100,60%,60%)'); ctx.fillStyle = cg; }
+    ctx.fill();
     ctx.lineWidth = 1.2 * px; ctx.strokeStyle = 'hsl(110,50%,30%)'; ctx.stroke();
     if (lod >= 2) {                                                    // thylakoid lamellae follow the cup
       ctx.lineWidth = 0.9 * px; ctx.strokeStyle = 'hsla(120,55%,24%,0.55)';
@@ -299,8 +310,11 @@ function drawInterior(ctx, P, L, pts, pal, state, u, lod, t, parts) {
             ctx.lineWidth = 1 * px; ctx.strokeStyle = hsl(310, 70, 36); ctx.stroke();
             if (lod >= 3) { ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.beginPath(); ctx.ellipse(cx - r * 0.3, cy - r * 0.25, r * 0.4, r * 0.18, -0.4, 0, TAU); ctx.fill(); }
           } else {
-            ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fillStyle = pal.nuc; ctx.fill();
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU);
+            if (lod >= 2) { const ng = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.05, cx, cy, r); ng.addColorStop(0, pal.nucLight); ng.addColorStop(0.55, pal.nuc); ng.addColorStop(1, pal.nucDark); ctx.fillStyle = ng; } else ctx.fillStyle = pal.nuc;
+            ctx.fill();
             ctx.lineWidth = 1.5 * px; ctx.strokeStyle = pal.nucDark; ctx.stroke();
+            if (lod >= 3) { ctx.fillStyle = 'rgba(255,255,255,0.75)'; for (let k = 0; k < 16; k++) { const an = (k / 16) * TAU; ctx.beginPath(); ctx.arc(cx + Math.cos(an) * r, cy + Math.sin(an) * r, 0.9 * px, 0, TAU); ctx.fill(); } }
             if (lod >= 2) {
               ctx.beginPath(); ctx.arc(cx, cy, r * 0.97, 0, TAU); ctx.lineWidth = 1.1 * px; ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.stroke();
               ctx.beginPath(); ctx.arc(cx + r * 0.1, cy + r * 0.05, r * 0.36, 0, TAU); ctx.fillStyle = pal.nucDark; ctx.fill();   // nucleolus
@@ -319,7 +333,8 @@ function drawInterior(ctx, P, L, pts, pal, state, u, lod, t, parts) {
       }
       case 'vacuole': {
         ctx.beginPath(); ctx.arc(x, y, it.r, 0, TAU);
-        ctx.fillStyle = 'hsla(200,70%,88%,0.95)'; ctx.fill(); ctx.lineWidth = 1.3 * px; ctx.strokeStyle = 'hsla(200,45%,62%,0.9)'; ctx.stroke();
+        { const vg = ctx.createRadialGradient(x - it.r * 0.3, y - it.r * 0.35, it.r * 0.05, x, y, it.r); vg.addColorStop(0, 'hsla(195,80%,96%,0.98)'); vg.addColorStop(1, 'hsla(205,70%,80%,0.95)'); ctx.fillStyle = vg; }
+        ctx.fill(); ctx.lineWidth = 1.3 * px; ctx.strokeStyle = 'hsla(200,45%,62%,0.9)'; ctx.stroke();
         if (lod >= 2) { ctx.beginPath(); ctx.arc(x - it.r * 0.25, y - it.r * 0.3, it.r * 0.55, Math.PI * 1.1, Math.PI * 1.65); ctx.lineWidth = 1.6 * px; ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.stroke(); }
         label('Vacuole', it); break;
       }
@@ -341,8 +356,11 @@ function drawInterior(ctx, P, L, pts, pal, state, u, lod, t, parts) {
       case 'plastid': {
         ctx.save(); ctx.translate(x, y); ctx.rotate(it.rot);
         ctx.beginPath(); ctx.ellipse(0, 0, it.r * 1.55, it.r * 0.62, 0, 0, TAU);
-        ctx.fillStyle = 'hsl(88,58%,50%)'; ctx.fill(); ctx.lineWidth = 1.1 * px; ctx.strokeStyle = 'hsl(100,50%,28%)'; ctx.stroke();
-        if (lod >= 3) { ctx.lineWidth = 0.8 * px; ctx.strokeStyle = 'hsla(105,55%,24%,0.65)'; for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(it.r * 0.4 * k - it.r * 0.1, -it.r * 0.5); ctx.lineTo(it.r * 0.4 * k - it.r * 0.1, it.r * 0.5); ctx.stroke(); } }
+        { const pg = ctx.createLinearGradient(0, -it.r * 0.62, 0, it.r * 0.62); pg.addColorStop(0, 'hsl(92,62%,64%)'); pg.addColorStop(1, 'hsl(86,56%,42%)'); ctx.fillStyle = pg; }
+        ctx.fill(); ctx.lineWidth = 1.1 * px; ctx.strokeStyle = 'hsl(100,50%,28%)'; ctx.stroke();
+        if (lod >= 3) {                                                   // grana: little stacks of discs
+          for (let k = -1; k <= 1; k++) for (let d = 0; d < 3; d++) { ctx.beginPath(); ctx.ellipse(it.r * 0.5 * k, (d - 1) * it.r * 0.17, it.r * 0.17, it.r * 0.065, 0, 0, TAU); ctx.fillStyle = 'hsl(100,55%,30%)'; ctx.fill(); }
+        }
         ctx.restore(); label('Chloroplast', it); break;
       }
       case 'golgi': {
@@ -360,7 +378,9 @@ function drawInterior(ctx, P, L, pts, pal, state, u, lod, t, parts) {
         ctx.save(); ctx.translate(x, y); ctx.rotate(it.rot);
         const w = it.r * 1.5 * it.len, h = it.r * 0.78;
         ctx.beginPath(); ctx.ellipse(0, 0, w, h, 0, 0, TAU);
-        ctx.fillStyle = hsl(350, 80, 82); ctx.fill(); ctx.lineWidth = 1.1 * px; ctx.strokeStyle = hsl(345, 60, 55); ctx.stroke();
+        { const mg = ctx.createLinearGradient(0, -h, 0, h); mg.addColorStop(0, hsl(350, 85, 90)); mg.addColorStop(1, hsl(350, 75, 74)); ctx.fillStyle = mg; }
+        ctx.fill(); ctx.lineWidth = 1.1 * px; ctx.strokeStyle = hsl(345, 60, 55); ctx.stroke();
+        if (lod >= 3) { ctx.beginPath(); ctx.ellipse(0, 0, w * 0.82, h * 0.7, 0, 0, TAU); ctx.lineWidth = 0.7 * px; ctx.strokeStyle = hsl(345, 60, 62, 0.6); ctx.stroke(); }   // inner membrane
         if (lod >= 3) {                                                   // cristae
           ctx.beginPath(); ctx.moveTo(-w * 0.7, 0);
           for (let k = 0; k < 6; k++) ctx.lineTo(-w * 0.7 + (k + 0.5) * w * 0.23, (k % 2 ? 1 : -1) * h * 0.55);
@@ -439,6 +459,12 @@ export function drawPortrait(ctx, W, H, P, state, opts = {}) {
   const availW = W * (labels ? 0.36 : 0.46), availH = H * 0.42;
   const u = Math.min(availW / hx, availH / hy);
   const parts = [];
+  ctx.save(); ctx.strokeStyle = 'rgba(120,130,150,0.07)'; ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctx.restore();
+  ctx.save(); ctx.translate(W / 2 + 6, H / 2 + 10); ctx.scale(u, u); ctx.rotate(rot);
+  trace(ctx, outline(P, state.t || 0, 64, state.div || 0)); ctx.shadowColor = 'rgba(20,30,50,0.28)'; ctx.shadowBlur = 24; ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore();
   ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(u, u); ctx.rotate(rot);
   drawCell(ctx, P, state, u, { lod: 3, parts });
   ctx.restore();

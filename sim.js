@@ -2,7 +2,7 @@
 // cell gains energy from light, dissolved nutrients or prey, pays for every organelle it has
 // and for moving, grows by banking the surplus, and divides when its biomass has doubled.
 // Selection is whatever those costs and benefits imply in this environment.
-import { mulberry32, clamp, develop, mutate, archetype, cloneGenome } from './genome.js';
+import { mulberry32, clamp, develop, mutate, archetype, cloneGenome, describe } from './genome.js';
 
 // Tunable physics constants (energy units per tick). Calibrated so simple cells are viable.
 export const K = { uptake: 0.022, photo: 0.035, base: 0.005, gene: 0.0002, nucleus: 0.012, mito: 0.004, golgi: 0.002, er: 0.003,
@@ -53,6 +53,7 @@ export class Sim {
     this.tick = 0; this.nextId = 1; this.cells = []; this.hist = []; this.events = [];
     this.mutCounts = { point: 0, regulatory: 0, duplication: 0, deletion: 0, insertion: 0 };
     this.deaths = { starved: 0, eaten: 0, lysed: 0 };
+    this.flow = this.newFlow(); this.totalBirths = 0;
     this.nut = new Float32Array(this.gw * this.gh).fill(0.35);
     this.nut2 = new Float32Array(this.gw * this.gh);
     this.vents = [0.18, 0.42, 0.66, 0.88].map((f) => ({ x: f * this.W, y: this.H * 0.94 }));
@@ -64,6 +65,8 @@ export class Sim {
     for (const [name, n] of mix) for (let i = 0; i < n; i++) this.spawn(archetype(name), null, this.rng() * this.W, this.rng() * this.H * 0.9);
     this.gridInit = true;
   }
+
+  newFlow() { return { photo: 0, uptake: 0, prey: 0, births: 0, starved: 0, eaten: 0, lysed: 0 }; }
 
   spawn(genome, parent, x, y) {
     const c = new Cell(this.nextId++, genome, x, y, parent);
@@ -156,6 +159,7 @@ export class Sim {
       const led = this.ledger(c, nutL, L);
       this.nut[gi] -= led.up / 6;
       let gain = led.up + led.photo, cost = led.cost;
+      this.flow.uptake += led.up; this.flow.photo += led.photo;
       const cap = led.cap, eff = led.eff, moving = led.moving;
       // osmotic stress: thin walls without contractile vacuoles burst in dilute water
       const protect = 0.15 + 0.7 * P.wall + 0.3 * P.cvac + 0.2 * P.vacuole;
@@ -198,7 +202,7 @@ export class Sim {
           const p = (P.mouth * (0.5 + 0.5 * P.flex + 0.3 * P.cilia)) / (1 + 2.2 * preyT.P.wall);
           if (rng() < p) {
             const e = preyT.B * 0.8 * eff;
-            gain += e; c.fv = Math.min(4, c.fv + 1); c.kills++;
+            gain += e; this.flow.prey += e; c.fv = Math.min(4, c.fv + 1); c.kills++;
             this.kill(preyT, 'eaten');
           }
         }
@@ -239,7 +243,7 @@ export class Sim {
 
   kill(c, cause) {
     if (!c.alive) return;
-    c.alive = false; c.cause = cause; this.deaths[cause]++;
+    c.alive = false; c.cause = cause; this.deaths[cause]++; this.flow[cause]++;
     if (cause !== 'eaten') { const i = this.gi(c.x, c.y); this.nut[i] = Math.min(1, this.nut[i] + c.B / 40); }   // recycling
   }
 
@@ -256,7 +260,7 @@ export class Sim {
       const d = new Cell(this.nextId++, g2, c.x + ax * off * (k ? 1 : -1), c.y + ay * off * (k ? 1 : -1), c);
       d.ang = c.ang + (rng() - 0.5); d.energy = half; d.muts = log;
       for (const m of log) this.mutCounts[m.type]++;
-      c.kids++;
+      c.kids++; this.flow.births++; this.totalBirths++;
       out.push(d);
     }
   }
@@ -265,12 +269,25 @@ export class Sim {
   record() {
     const cs = this.cells, n = cs.length || 1;
     const f = (fn) => cs.filter(fn).length / n;
+    const fl = this.flow, inc = fl.photo + fl.uptake + fl.prey || 1;
+    const plans = new Map();
+    for (const c of cs) { const k = describe(c.P); plans.set(k, (plans.get(k) || 0) + 1); }
+    let H = 0; for (const v of plans.values()) { const p = v / n; H -= p * Math.log(p); }
+    let maxGen = 0, bio = 0, eFrac = 0, age = 0, mrate = 0, nutSum = 0;
+    for (const c of cs) { if (c.gen > maxGen) maxGen = c.gen; bio += c.B; eFrac += c.energy / c.B; age += c.age; mrate += this.params.mutation * (1 + 4 * c.P.mutator); }
+    for (let i = 0; i < this.nut.length; i++) nutSum += this.nut[i];
     this.hist.push({
       t: this.tick, n: cs.length,
       euk: f((c) => c.P.euk), photo: f((c) => c.P.plastids || c.P.thylakoid > 0.3), flag: f((c) => c.P.flagella.length > 0),
       cilia: f((c) => c.P.cilia > 0.3), wall: f((c) => c.P.wall > 0.5), mouth: f((c) => c.P.mouth > 0.3), amoeba: f((c) => c.P.lobe > 0.3),
       size: cs.reduce((s, c) => s + c.P.size, 0) / n, genes: cs.reduce((s, c) => s + c.P.genes, 0) / n,
+      // energy sources this window (share of all income) and demography
+      srcLight: fl.photo / inc, srcNut: fl.uptake / inc, srcPrey: fl.prey / inc,
+      births: fl.births, starved: fl.starved, eaten: fl.eaten, lysed: fl.lysed,
+      plans: plans.size, diversity: Math.exp(H), maxGen, biomass: bio, energyFrac: eFrac / n, meanAge: age / n, mutRate: mrate / n,
+      nutrient: nutSum / this.nut.length, speed: cs.reduce((s, c) => s + (c.thrust > 0.05 ? c.thrust / c.drag : 0), 0) / n,
     });
+    this.flow = this.newFlow();
     if (this.hist.length > 1500) this.hist.shift();
   }
 

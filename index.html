@@ -5,34 +5,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cell Evolution</title>
 <style>
-  :root { --bg:#0b1218; --panel:#121c25; --panel2:#18252f; --line:#233341; --text:#dfe9f0; --dim:#8196a6; --accent:#5fd6c8; --warn:#ffb454; }
+  :root { --bg:#0a1117; --panel:#111b24; --panel2:#17242e; --line:#223340; --text:#dfe9f0; --dim:#8196a6; --accent:#5fd6c8; --warn:#ffb454; }
   * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-  header { display:flex; align-items:center; gap:14px; padding:8px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:8px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; background:linear-gradient(#0e1a23,#0a1117); }
   h1 { font-size:16px; margin:0; } h1 span { color:var(--accent); }
   .chips { display:flex; gap:7px; flex-wrap:wrap; margin-left:auto; }
   .chip { background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:2px 10px; color:var(--dim); }
   .chip b { color:var(--text); font-variant-numeric:tabular-nums; }
-  .app { display:grid; grid-template-columns:240px minmax(0,1fr) 420px; gap:10px; padding:10px 14px 20px; align-items:start; }
-  @media (max-width:1280px) { .app { grid-template-columns:230px minmax(0,1fr); } .right { grid-column:1 / -1; } }
+  .app { display:grid; grid-template-columns:236px minmax(0,1fr) 430px; gap:10px; padding:10px 14px 24px; align-items:start; }
+  @media (max-width:1300px) { .app { grid-template-columns:230px minmax(0,1fr); } .right { grid-column:1 / -1; } }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
-  .panel h2 { margin:0 0 8px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+  .panel h2 { margin:0 0 8px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600; display:flex; align-items:center; gap:8px; }
+  .panel h2 .tools { margin-left:auto; display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; font-weight:400; }
   label.s { display:block; margin:7px 0; } label.s span { display:flex; justify-content:space-between; color:var(--dim); } label.s b { color:var(--text); font-weight:500; }
   input[type=range] { width:100%; accent-color:var(--accent); }
   button, select { background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:7px; padding:5px 9px; font:inherit; cursor:pointer; }
-  button:hover { border-color:var(--accent); }
+  button:hover { border-color:var(--accent); } select.mini { padding:2px 5px; font-size:11px; } label.chk { color:var(--dim); font-size:11px; display:inline-flex; gap:4px; align-items:center; cursor:pointer; }
   .row { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
   #world { width:100%; aspect-ratio:1800 / 1100; max-height:calc(100vh - 120px); border-radius:10px; border:1px solid var(--line); display:block; background:#06222b; cursor:grab; touch-action:none; }
   #world.drag { cursor:grabbing; }
   #portrait { width:100%; border-radius:8px; background:#fbfaf6; display:block; }
-  .desc { color:var(--dim); margin:6px 0 2px; }
+  .desc { color:#b7c7d3; margin:8px 0 4px; font-size:13px; }
   .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-variant-numeric:tabular-nums; } .kv span:nth-child(odd) { color:var(--dim); }
   .bar { height:7px; background:#0d1a22; border-radius:4px; overflow:hidden; margin:3px 0 7px; } .bar i { display:block; height:100%; }
-  .genes { max-height:150px; overflow:auto; font-size:12px; } .gene { display:grid; grid-template-columns:78px 1fr 70px; gap:6px; align-items:center; } .gene i { display:block; height:5px; border-radius:3px; background:var(--accent); }
+  .genes { max-height:210px; overflow:auto; font-size:12px; } .gene { display:grid; grid-template-columns:70px 1fr 74px; gap:6px; align-items:center; padding:1px 0; cursor:help; } .gene i { display:block; height:5px; border-radius:3px; background:var(--accent); }
+  .geneinfo { color:var(--dim); font-size:11px; min-height:30px; margin-top:6px; }
   .plan { display:grid; grid-template-columns:1fr auto; gap:6px; padding:3px 0; cursor:pointer; border-bottom:1px solid #1a2a36; } .plan:hover { color:var(--accent); }
-  canvas#chart { width:100%; height:150px; display:block; }
-  .legend { display:flex; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--dim); margin-top:4px; } .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:8px; }
+  .tile { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:6px 9px; } .tile small { display:block; color:var(--dim); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; } .tile b { font-size:17px; font-variant-numeric:tabular-nums; font-weight:600; } .tile em { font-style:normal; color:var(--dim); font-size:11px; margin-left:3px; }
+  .charts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } @media (max-width:1000px) { .charts { grid-template-columns:1fr; } }
+  .charts .panel { margin-bottom:0; } canvas.chart { width:100%; height:170px; display:block; }
+  .legend { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:11px; color:var(--dim); margin-top:6px; } .legend label { cursor:pointer; display:inline-flex; align-items:center; gap:4px; user-select:none; } .legend label.off { opacity:.35; } .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; }
   .hint { color:var(--dim); font-size:12px; }
+  .part { border-top:1px solid #1b2b37; padding:7px 0 6px; } .part:first-child { border-top:0; }
+  .part .pn { display:flex; align-items:center; gap:7px; font-weight:600; } .part .pn i { width:10px; height:10px; border-radius:3px; flex:none; } .part .pn em { font-style:normal; color:var(--dim); font-weight:400; margin-left:auto; font-size:11.5px; }
+  .part p { margin:3px 0 0; color:#b5c5d1; font-size:12px; } .part p.cost { color:#8da1b0; } .part p.cost::before { content:'Trade-off: '; color:#e0a85a; }
+  .rec { display:grid; grid-template-columns:1fr auto; gap:6px; padding:3px 0; cursor:pointer; border-bottom:1px solid #1a2a36; font-size:12px; } .rec:hover { color:var(--accent); } .rec span:first-child { color:var(--dim); }
 </style>
 </head>
 <body>
@@ -74,17 +83,49 @@
       <div class="hint">Wheel: zoom. Drag: pan. Click a cell to inspect it. Double-click: zoom in and follow.</div>
       <div class="row"><button id="follow">Follow selected</button><button id="fit">Show whole pool</button></div>
     </div>
+    <div class="panel">
+      <h2>Records (click to inspect)</h2>
+      <div id="records"></div>
+    </div>
   </div>
   <div class="mid">
     <canvas id="world"></canvas>
     <div class="panel" style="margin-top:10px">
+      <h2>Ecosystem</h2>
+      <div class="tiles" id="tiles"></div>
+      <div class="hint" id="mutline" style="margin-top:8px"></div>
+    </div>
+    <div class="panel">
       <h2>Body plans in the pool (click to inspect one)</h2>
       <div id="plans"></div>
     </div>
-    <div class="panel">
-      <h2>Share of the population with each feature</h2>
-      <canvas id="chart"></canvas>
-      <div class="legend" id="legend"></div>
+    <div class="charts">
+      <div class="panel">
+        <h2>Features in the population
+          <span class="tools"><label class="chk"><input type="checkbox" id="ch-auto" checked>auto-scale</label>
+            <select class="mini" id="ch-smooth"><option value="1">raw</option><option value="5" selected>smooth</option><option value="15">smoother</option></select></span></h2>
+        <canvas class="chart" id="chart-features"></canvas><div class="legend" id="leg-features"></div>
+      </div>
+      <div class="panel">
+        <h2>Population <span class="tools"><label class="chk"><input type="checkbox" id="ch-fill" checked>fill</label></span></h2>
+        <canvas class="chart" id="chart-pop"></canvas><div class="legend" id="leg-pop"></div>
+      </div>
+      <div class="panel">
+        <h2>Births and deaths per 30 ticks</h2>
+        <canvas class="chart" id="chart-demo"></canvas><div class="legend" id="leg-demo"></div>
+      </div>
+      <div class="panel">
+        <h2>Where the energy comes from</h2>
+        <canvas class="chart" id="chart-energy"></canvas><div class="legend" id="leg-energy"></div>
+      </div>
+      <div class="panel">
+        <h2>Diversity: effective number of body plans</h2>
+        <canvas class="chart" id="chart-div"></canvas><div class="legend" id="leg-div"></div>
+      </div>
+      <div class="panel">
+        <h2>Traits: average size and genome length</h2>
+        <canvas class="chart" id="chart-traits"></canvas><div class="legend" id="leg-traits"></div>
+      </div>
     </div>
   </div>
   <div class="right">
@@ -95,12 +136,17 @@
       <div class="kv" id="stats"></div>
     </div>
     <div class="panel">
+      <h2>Structures and what they do</h2>
+      <div id="parts"><div class="hint">Select a cell to see what each part is for.</div></div>
+    </div>
+    <div class="panel">
       <h2>Energy</h2>
       <div id="energy"></div>
     </div>
     <div class="panel">
-      <h2>Genome (kind, amplitude, expression)</h2>
+      <h2>Genome (hover a gene for its meaning)</h2>
       <div class="genes" id="genes"></div>
+      <div class="geneinfo" id="geneinfo">Genes of the same kind add up. Duplicated genes can drift apart.</div>
       <div class="hint" id="muts" style="margin-top:6px"></div>
     </div>
   </div>
