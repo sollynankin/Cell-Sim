@@ -222,9 +222,54 @@ function drawWorld(dt) {
 
 // ---------------------------------------------------------------- inspector
 const pctx = $('portrait').getContext('2d');
+let tab = 'vitals', selHist = [], portHits = [], highlight = null, histTick = 0;
+function setTab(t) {
+  tab = t;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('.tab').forEach((el) => el.classList.toggle('on', el.id === 'tab-' + t));
+  if (t === 'genome') drawDNAView();
+  refreshTabs(true);
+}
+document.querySelectorAll('#tabs button').forEach((b) => { b.onclick = () => setTab(b.dataset.t); });
+
+const planOf = (c) => describe(c.P);
+function cycle(dir) {
+  if (!selected) return;
+  const key = planOf(selected), same = sim.cells.filter((c) => planOf(c) === key).sort((a, b) => a.id - b.id);
+  if (!same.length) return;
+  const i = same.findIndex((c) => c.id === selected.id), next = same[((i < 0 ? 0 : i + dir) + same.length) % same.length];
+  select(next); if (cam.follow) zoomTo(next);
+}
+$('in-prev').onclick = () => cycle(-1); $('in-next').onclick = () => cycle(1);
+$('in-follow').onclick = () => { if (selected && selected.alive) zoomTo(selected); };
+$('in-png').onclick = () => { if (!selected) return; $('portrait').toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `cell-${selected.id}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }); };
+$('in-labels').onchange = () => {};
+
+// clicking a label (or its dot) on the portrait jumps to that structure's explanation
+$('portrait').addEventListener('click', (e) => {
+  const cvp = $('portrait'), r = cvp.getBoundingClientRect(), x = (e.clientX - r.left) * (cvp.width / r.width), y = (e.clientY - r.top) * (cvp.height / r.height);
+  const hit = portHits.find((h) => Math.hypot(h.ax - x, h.ay - y) < 14 || (x >= h.lx - 4 && x <= h.lx + h.lw + 4 && y >= h.ly && y <= h.ly + h.lh));
+  if (hit) focusPart(hit.name);
+});
+function focusPart(name) {
+  setTab('structures');
+  const el = [...document.querySelectorAll('#parts .part')].find((p) => (p.dataset.labels || '').split('|').includes(name));
+  if (!el) return;
+  document.querySelectorAll('#parts .part.hl').forEach((p) => p.classList.remove('hl'));
+  el.classList.add('hl'); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  setTimeout(() => el.classList.remove('hl'), 2500);
+}
+
 function renderStatic() {
   const c = selected;
-  if (!c) { drawDNAView(); $('parts').innerHTML = '<div class="hint">Select a cell to see what each part is for.</div>'; $('genes').innerHTML = ''; $('desc').textContent = 'Click a cell in the pool.'; $('muts').textContent = ''; return; }
+  selHist = []; highlight = null;
+  if (!c) {
+    $('selname').textContent = 'nothing selected'; $('desc').textContent = 'Click a cell in the pool.';
+    $('parts').innerHTML = '<div class="hint">Select a cell to see what each part is for.</div>'; $('genes').innerHTML = ''; $('muts').textContent = ''; $('dnaleg').innerHTML = '';
+    $('tab-vitals').innerHTML = '<div class="hint">Select a cell to see its vital signs.</div>'; $('tab-family').innerHTML = '<div class="hint">Select a cell to see its family.</div>'; $('energy').innerHTML = '';
+    drawDNAView(); return;
+  }
+  $('selname').textContent = `#${c.id} · gen ${c.gen}`;
   $('desc').textContent = describe(c.P).replace(/^./, (m) => m.toUpperCase());
   const maxv = Math.max(1, ...c.g.map((q) => q.v * q.x));
   $('genes').innerHTML = [...c.g].sort((a, b) => a.k.localeCompare(b.k) || b.v - a.v).map((q) => `<div class="gene" data-k="${q.k}" title="${GENE_INFO[q.k] || ''}"><span>${q.k}</span><i style="width:${Math.min(100, (q.v * q.x / maxv) * 100)}%"></i><span>${q.v.toFixed(2)} × ${q.x.toFixed(2)}</span></div>`).join('');
@@ -232,8 +277,70 @@ function renderStatic() {
   $('muts').textContent = c.muts.length ? 'Mutations at its birth: ' + c.muts.map((m) => `${m.type} (${m.kind})`).join(', ') : 'No mutations at its birth.';
   $('dnaleg').innerHTML = dnaLegend(c.g); dnaHover = -1; lastRungs = []; drawDNAView();
   const parts = partsOf(c.P);
-  $('parts').innerHTML = parts.map((p) => `<div class="part"><div class="pn"><i style="background:${p.color}"></i>${p.name}<em>${p.level}</em></div><p>${p.what}</p><p class="cost">${p.cost}</p></div>`).join('') || '<div class="hint">A very simple cell with no specialised structures.</div>';
+  $('parts').innerHTML = parts.map((p) => `<div class="part" data-labels="${p.labels.join('|')}"><div class="pn"><i style="background:${p.color}"></i>${p.name}<em>${p.level}</em></div><p>${p.what}</p><p class="cost">${p.cost}</p></div>`).join('') || '<div class="hint">A very simple cell with no specialised structures.</div>';
+  $('parts').querySelectorAll('.part').forEach((el) => {
+    el.onmouseenter = () => { highlight = new Set((el.dataset.labels || '').split('|').filter(Boolean)); };
+    el.onmouseleave = () => { highlight = null; };
+  });
+  refreshTabs(true);
 }
+
+// percentile of a cell's value among all living cells (0..1)
+function rank(c, fn) { const v = fn(c); let lo = 0, eq = 0; for (const o of sim.cells) { const w = fn(o); if (w < v) lo++; else if (w === v) eq++; } return (lo + 0.5 * eq) / Math.max(1, sim.cells.length); }
+const meter = (label, p, val) => `<div class="meter"><span>${label}</span><div class="track"><div class="fill" style="width:${Math.round(p * 100)}%"></div><div class="mid" title="median of the pool"></div></div><b>${val}</b></div>`;
+const item = (label, v, mx, color) => `<div class="item"><span>${label}</span><div class="track"><i style="width:${Math.min(100, v / mx * 100)}%;background:${color}"></i></div><b>${(v * 1000).toFixed(1)}</b></div>`;
+
+function refreshTabs(force) {
+  const c = selected; if (!c) return;
+  const alive = c.alive;
+  if (tab === 'vitals' || force) {
+    const speed = c.thrust > 0.05 ? c.thrust / c.drag : 0, gi = sim.gi(c.x, c.y);
+    const light = sim.light(c.x, c.y) * (sim.shade ? sim.shade[gi] : 1), nut = sim.nut[gi];
+    let near = 0; for (const o of sim.cells) if (o !== c && Math.abs(o.x - c.x) < 90 && Math.abs(o.y - c.y) < 90) near++;
+    const kv = [['Status', alive ? 'alive' : 'gone: ' + c.cause], ['Generation', c.gen], ['Age', c.age + ' ticks'], ['Offspring', c.kids], ['Prey eaten', c.kills], ['Size', (c.sc * 100).toFixed(0) + '% of newborn'], ['Speed', speed.toFixed(2) + ' px/tick'], ['Genes', c.P.genes], ['Growth to division', clamp((c.B / c.B0 - 1) * 100, 0, 100).toFixed(0) + '%']];
+    $('tab-vitals').innerHTML = `<div class="kv">${kv.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('')}</div>
+      <h4>Compared with the pool <span style="text-transform:none;letter-spacing:0;font-weight:400">(orange line = median)</span></h4>
+      ${meter('Size', rank(c, (o) => o.area * o.sc * o.sc), (c.area * c.sc * c.sc).toFixed(1) + ' u²')}
+      ${meter('Speed', rank(c, (o) => (o.thrust > 0.05 ? o.thrust / o.drag : 0)), speed.toFixed(2))}
+      ${meter('Energy store', rank(c, (o) => o.energy / o.B), (c.energy / c.B * 100).toFixed(0) + '%')}
+      ${meter('Net income', rank(c, (o) => (o.lastGain || 0) - (o.lastCost || 0)), (((c.lastGain || 0) - (c.lastCost || 0)) * 1000).toFixed(1))}
+      ${meter('Genome size', rank(c, (o) => o.P.genes), c.P.genes + ' genes')}
+      ${meter('Age', rank(c, (o) => o.age), c.age)}
+      ${meter('Offspring', rank(c, (o) => o.kids), c.kids)}
+      <h4>Where it is</h4>
+      <div class="kv"><span>Depth</span><span>${(c.y / sim.H * 100).toFixed(0)}% down from the surface</span><span>Light here</span><span>${(light * 100).toFixed(0)}%</span><span>Nutrients here</span><span>${(nut * 100).toFixed(0)}%</span><span>Neighbours (90 px)</span><span>${near}</span></div>`;
+  }
+  if (tab === 'energy' || force) {
+    const o = {}; const gi = sim.gi(c.x, c.y), L = sim.light(c.x, c.y) * (sim.shade ? sim.shade[gi] : 1);
+    sim.ledger(c, sim.nut[gi], L, o);
+    const costs = Object.entries(o.items).filter(([, v]) => v > 1e-6).sort((a, b) => b[1] - a[1]);
+    const totalCost = costs.reduce((a, [, v]) => a + v, 0), income = o.up + o.photo, mx = Math.max(income, totalCost, 1e-6);
+    $('energy').innerHTML = `<h4 style="margin-top:2px">Income now (per tick ×1000)</h4>${item('Light (photosynthesis)', o.photo, mx, '#fde047')}${item('Dissolved nutrients', o.up, mx, '#fb923c')}
+      <div class="hint">Eating prey adds lump sums: this cell has eaten ${c.kills}.</div>
+      <h4>Where the energy goes</h4>${costs.map(([k, v]) => item(k, v, mx, '#ff7a66')).join('') || '<div class="hint">No costs.</div>'}
+      <div class="kv" style="margin-top:8px"><span>Total income</span><span style="color:#7bdc65">${(income * 1000).toFixed(1)}</span><span>Total upkeep</span><span style="color:#ff7a66">${(totalCost * 1000).toFixed(1)}</span><span>Net per tick</span><span style="color:${income >= totalCost ? '#7bdc65' : '#ff7a66'}">${((income - totalCost) >= 0 ? '+' : '') + ((income - totalCost) * 1000).toFixed(1)}</span>
+      <span>Stored energy</span><span>${(c.energy / c.B * 100).toFixed(0)}% of biomass</span><span>Efficiency</span><span>extracts ${(o.eff * 100).toFixed(0)}% from food</span></div>`;
+    drawSpark();
+  }
+  if (tab === 'family' || force) {
+    const kin = sim.cells.filter((o) => o.lin === c.lin).length, kids = sim.cells.filter((o) => o.parent === c.id), sibs = sim.cells.filter((o) => o.parent === c.parent && c.parent && o !== c);
+    const chips = (arr) => arr.length ? arr.slice(0, 14).map((o) => `<span class="chipbtn" data-id="${o.id}">#${o.id}</span>`).join('') + (arr.length > 14 ? ` +${arr.length - 14} more` : '') : '<span class="hint">none alive</span>';
+    const anc = c.anc.map((a) => `<div class="anc"><b>#${a.id}</b> · generation ${a.gen}<small>${a.muts.length ? 'its birth changed: ' + a.muts.join(', ') : 'exact copy of its parent'}</small></div>`).join('');
+    $('tab-family').innerHTML = `<div class="kv"><span>Generation</span><span>${c.gen}</span><span>Founder</span><span>#${c.lin}</span><span>Living descendants of that founder</span><span>${kin}</span></div>
+      <h4>Children alive</h4>${chips(kids)}<h4>Siblings alive</h4>${chips(sibs)}
+      <h4>Ancestors (newest first)</h4><div class="anc me"><b>#${c.id}</b> · this cell<small>${c.muts.length ? 'its birth changed: ' + c.muts.map((m) => m.type + ' ' + m.kind).join(', ') : 'exact copy of its parent'}</small></div>${anc || '<div class="hint">A founder: no ancestors recorded.</div>'}`;
+    $('tab-family').querySelectorAll('.chipbtn').forEach((el) => { el.onclick = () => { const o = sim.cells.find((x) => x.id === +el.dataset.id); if (o) { select(o); if (cam.follow) zoomTo(o); } }; });
+  }
+}
+function drawSpark() {
+  const cv2 = $('spark'), x = cv2.getContext('2d'), W = cv2.width, H = cv2.height; x.clearRect(0, 0, W, H);
+  if (selHist.length < 3) { x.fillStyle = '#6b7f8f'; x.font = '20px system-ui'; x.fillText('collecting…', 16, H / 2); return; }
+  const mx = Math.max(1, ...selHist.map((p) => Math.max(p.g, p.c))) * 1.15, X = (i) => 8 + (i / (selHist.length - 1)) * (W - 16);
+  x.strokeStyle = '#1d2c38'; x.lineWidth = 1; for (let i = 1; i < 4; i++) { x.beginPath(); x.moveTo(0, H * i / 4); x.lineTo(W, H * i / 4); x.stroke(); }
+  const line = (fn, col, top) => { x.beginPath(); x.strokeStyle = col; x.lineWidth = 3; selHist.forEach((p, i) => { const y = H - 8 - (H - 16) * fn(p) / top; i ? x.lineTo(X(i), y) : x.moveTo(X(i), y); }); x.stroke(); };
+  line((p) => p.g, '#7bdc65', mx); line((p) => p.c, '#ff7a66', mx); line((p) => clamp(p.e, 0, 1), '#5fd6c8', 1);
+}
+
 // ---------------------------------------------------------------- DNA helix
 const dnaCv = $('dna'), dctx = dnaCv.getContext('2d');
 let dnaHover = -1, lastRungs = [];
@@ -249,24 +356,17 @@ function drawDNAView() {
   if (!selected) { dctx.fillStyle = '#0b1620'; dctx.fillRect(0, 0, dnaCv.width, dnaCv.height); lastRungs = []; return; }
   lastRungs = drawDNA(dctx, dnaCv.width, dnaCv.height, selected.g, 0.9, dnaHover);
 }
+
 let lastInspect = 0;
 function drawInspector() {
   const c = selected;
-  if (!c) { pctx.fillStyle = '#fbfaf6'; pctx.fillRect(0, 0, 840, 640); pctx.fillStyle = '#999'; pctx.font = '22px Georgia'; pctx.textAlign = 'center'; pctx.fillText('Click a cell to see its structure', 420, 320); return; }
-  drawPortrait(pctx, 840, 640, c.P, { t: tNow, seed: c.id, fv: c.fv, div: c.divT > 0 ? Math.min(1, c.divT / 70) : 0, beat: c.beat ?? 1 }, {});
-  if (performance.now() - lastInspect > 400) {
-    lastInspect = performance.now();
-    const rows = [['Cell', '#' + c.id + (c.alive ? '' : ' (gone: ' + c.cause + ')')], ['Generation', c.gen], ['Parent', c.parent ? '#' + c.parent : 'founder'], ['Founder line', '#' + c.lin], ['Age', c.age + ' ticks'], ['Offspring', c.kids], ['Prey eaten', c.kills],
-      ['Size', (c.sc * 100).toFixed(0) + '% of newborn'], ['Speed', (c.thrust > 0.05 ? c.thrust / c.drag : 0).toFixed(2) + ' px/tick'], ['Genes', c.P.genes]];
-    $('stats').innerHTML = rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
-    const gain = (c.lastGain || 0) * 1000, cost = (c.lastCost || 0) * 1000, mx = Math.max(gain, cost, 1) * 1.2;
-    $('energy').innerHTML = `<div class="kv"><span>Income</span><span>${gain.toFixed(1)}</span></div><div class="bar"><i style="width:${gain / mx * 100}%;background:#7bdc65"></i></div>
-      <div class="kv"><span>Upkeep + movement</span><span>${cost.toFixed(1)}</span></div><div class="bar"><i style="width:${cost / mx * 100}%;background:#ff7a66"></i></div>
-      <div class="kv"><span>Net per tick</span><span style="color:${gain >= cost ? '#7bdc65' : '#ff7a66'}">${(gain - cost >= 0 ? '+' : '') + (gain - cost).toFixed(1)}</span></div>
-      <div class="kv"><span>Stored energy</span><span>${(c.energy / c.B * 100).toFixed(0)}% of biomass</span></div><div class="bar"><i style="width:${clamp(c.energy / c.B, 0, 1) * 100}%;background:#5fd6c8"></i></div>
-      <div class="kv"><span>Growth to division</span><span>${clamp((c.B / c.B0 - 1) * 100, 0, 100).toFixed(0)}%</span></div><div class="bar"><i style="width:${clamp(c.B / c.B0 - 1, 0, 1) * 100}%;background:#ffb454"></i></div>`;
-  }
+  if (!c) { pctx.fillStyle = '#fbfaf6'; pctx.fillRect(0, 0, 900, 660); pctx.fillStyle = '#999'; pctx.font = '24px Georgia'; pctx.textAlign = 'center'; pctx.fillText('Click a cell to see its structure', 450, 330); return; }
+  portHits = [];
+  drawPortrait(pctx, 900, 660, c.P, { t: tNow, seed: c.id, fv: c.fv, div: c.divT > 0 ? Math.min(1, c.divT / 70) : 0, beat: c.beat ?? 1 }, { labels: $('in-labels').checked, highlight, hits: portHits });
+  if (alive(c) && ++histTick % 6 === 0) { selHist.push({ g: (c.lastGain || 0) * 1000, c: (c.lastCost || 0) * 1000, e: c.energy / c.B }); if (selHist.length > 200) selHist.shift(); }
+  if (performance.now() - lastInspect > 400) { lastInspect = performance.now(); refreshTabs(false); }
 }
+const alive = (c) => c.alive;
 
 // ---------------------------------------------------------------- charts
 const FEATURES = [['euk', 'eukaryote', '#c084fc'], ['photo', 'photosynthetic', '#7bdc65'], ['flag', 'flagellated', '#5fd6c8'], ['cilia', 'ciliated', '#60a5fa'], ['wall', 'walled', '#ffb454'], ['mouth', 'predator', '#ff6b57'], ['amoeba', 'amoeboid', '#f0abfc']];

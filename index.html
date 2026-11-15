@@ -37,7 +37,18 @@
   #world { width:100%; aspect-ratio:1800 / 1100; max-height:calc(100vh - 120px); border-radius:10px; border:1px solid var(--line); display:block; background:#06222b; cursor:grab; touch-action:none; }
   #world.drag { cursor:grabbing; }
   #dna { width:100%; height:190px; border-radius:8px; display:block; cursor:crosshair; }
-  #portrait { width:100%; border-radius:8px; background:#fbfaf6; display:block; }
+  @media (min-width:1301px) { .right { position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; align-self:start; scrollbar-width:thin; } }
+  .insph { display:flex; align-items:center; gap:8px; margin-bottom:6px; } .insph h2 { margin:0; } .insph .sel { color:var(--text); font-weight:600; font-size:12.5px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .insph .tools { margin-left:auto; display:flex; gap:4px; } .portbar { display:flex; align-items:center; gap:10px; margin:5px 0 0; } .portbar .hint { font-size:11px; line-height:1.3; }
+  .tabs { display:flex; gap:1px; border-bottom:1px solid var(--line); margin:10px 0 10px; } .tabs button { background:none; border:0; border-bottom:2px solid transparent; border-radius:0; padding:6px 9px; color:var(--dim); } .tabs button:hover { color:var(--text); } .tabs button.on { color:var(--text); border-bottom-color:var(--accent); font-weight:600; }
+  .tab { display:none; } .tab.on { display:block; } .tab h4 { margin:12px 0 6px; font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+  .meter { display:grid; grid-template-columns:92px 1fr 50px; gap:8px; align-items:center; margin:5px 0; font-size:12px; } .meter .track { position:relative; height:8px; background:#0d1a22; border-radius:4px; } .meter .fill { position:absolute; left:0; top:0; bottom:0; border-radius:4px; background:linear-gradient(90deg,#2a8f86,var(--accent)); } .meter .mid { position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:#ffb454; opacity:.7; } .meter b { text-align:right; font-weight:500; font-variant-numeric:tabular-nums; }
+  .item { display:grid; grid-template-columns:150px 1fr 46px; gap:8px; align-items:center; font-size:12px; margin:3px 0; } .item .track { height:7px; background:#0d1a22; border-radius:4px; overflow:hidden; } .item .track i { display:block; height:100%; border-radius:4px; } .item b { text-align:right; font-weight:500; font-variant-numeric:tabular-nums; }
+  .anc { border-left:2px solid #2a4052; margin:0 0 0 6px; padding:3px 0 6px 14px; position:relative; font-size:12px; } .anc::before { content:''; position:absolute; left:-6px; top:8px; width:10px; height:10px; border-radius:50%; background:#2a4052; border:2px solid var(--panel); } .anc.me::before { background:var(--accent); } .anc small { display:block; color:var(--dim); }
+  .chipbtn { display:inline-block; margin:2px 4px 2px 0; padding:1px 8px; border-radius:999px; border:1px solid var(--line); background:var(--panel2); cursor:pointer; font-size:12px; } .chipbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .part.hl { background:rgba(225,29,72,.13); box-shadow:0 0 0 1px rgba(225,29,72,.5) inset; border-radius:6px; } .part { padding-left:4px; padding-right:4px; transition:background .15s; }
+  #spark { width:100%; height:100px; border-radius:6px; background:#0b1620; display:block; }
+  #portrait { width:100%; cursor:pointer; border-radius:8px; background:#fbfaf6; display:block; }
   .desc { color:#b7c7d3; margin:8px 0 4px; font-size:13px; }
   .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-variant-numeric:tabular-nums; } .kv span:nth-child(odd) { color:var(--dim); }
   .bar { height:7px; background:#0d1a22; border-radius:4px; overflow:hidden; margin:3px 0 7px; } .bar i { display:block; height:100%; }
@@ -163,32 +174,34 @@
       </section>
     </div>
   </div>
-  <div class="right">
-    <div class="panel">
-      <h2>Inspector</h2>
-      <canvas id="portrait" width="840" height="640"></canvas>
+  <div class="right" id="right">
+    <div class="panel insp">
+      <div class="insph"><h2>Inspector</h2><span class="sel" id="selname">nothing selected</span>
+        <span class="tools"><button class="ib" id="in-prev" title="Previous cell with this body plan">&#9664;</button><button class="ib" id="in-next" title="Next cell with this body plan">&#9654;</button><button class="ib" id="in-follow" title="Zoom to this cell and follow it">&#9678;</button><button class="ib" id="in-png" title="Save the portrait as a PNG">&#11015;</button></span></div>
+      <canvas id="portrait" width="900" height="660"></canvas>
+      <div class="portbar"><label class="chk"><input type="checkbox" id="in-labels" checked>labels</label><span class="hint">Click a label to read about it. Hover a structure in the Structures tab to find it here.</span></div>
       <div class="desc" id="desc">Click a cell in the pool.</div>
-      <div class="kv" id="stats"></div>
-    </div>
-    <div class="panel">
-      <h2>Structures and what they do</h2>
-      <div id="parts"><div class="hint">Select a cell to see what each part is for.</div></div>
-    </div>
-    <div class="panel">
-      <h2>Energy</h2>
-      <div id="energy"></div>
-    </div>
-    <div class="panel">
-      <h2>DNA: one rung per gene, brighter = stronger</h2>
-      <canvas id="dna" width="860" height="380"></canvas>
-      <div class="legend" id="dnaleg"></div>
-      <div class="geneinfo" id="dnainfo">Hover a rung to read the gene. Rungs are grouped by kind; the helix turns slowly.</div>
-    </div>
-    <div class="panel">
-      <h2>Genome table (hover a gene for its meaning)</h2>
-      <div class="genes" id="genes"></div>
-      <div class="geneinfo" id="geneinfo">Genes of the same kind add up. Duplicated genes can drift apart.</div>
-      <div class="hint" id="muts" style="margin-top:6px"></div>
+      <div class="tabs" id="tabs">
+        <button data-t="vitals" class="on">Vitals</button><button data-t="structures">Structures</button><button data-t="energy">Energy</button><button data-t="genome">Genome</button><button data-t="family">Family</button>
+      </div>
+      <div class="tab on" id="tab-vitals"></div>
+      <div class="tab" id="tab-structures"><div id="parts"><div class="hint">Select a cell to see what each part is for.</div></div></div>
+      <div class="tab" id="tab-energy">
+        <div id="energy"></div>
+        <h4>Last few seconds</h4>
+        <canvas id="spark" width="760" height="200"></canvas>
+        <div class="legend"><span><i style="background:#7bdc65"></i>income</span><span><i style="background:#ff7a66"></i>upkeep + movement</span><span><i style="background:#5fd6c8"></i>stored energy (% of biomass)</span></div>
+      </div>
+      <div class="tab" id="tab-genome">
+        <canvas id="dna" width="860" height="380"></canvas>
+        <div class="legend" id="dnaleg"></div>
+        <div class="geneinfo" id="dnainfo">One rung per gene, grouped by kind. Brighter, thicker and glowing means a stronger gene. Hover a rung to read it.</div>
+        <h4>Genome table</h4>
+        <div class="genes" id="genes"></div>
+        <div class="geneinfo" id="geneinfo">Genes of the same kind add up. Duplicated genes can drift apart.</div>
+        <div class="hint" id="muts" style="margin-top:6px"></div>
+      </div>
+      <div class="tab" id="tab-family"></div>
     </div>
   </div>
 </div>

@@ -17,7 +17,7 @@ export class Cell {
     this.id = id; this.g = genome; this.P = develop(genome);
     this.x = x; this.y = y; this.ang = Math.random() * TWO_PI; this.vx = 0; this.vy = 0;
     this.parent = parent ? parent.id : 0; this.gen = parent ? parent.gen + 1 : 0; this.lin = parent ? parent.lin : id;
-    this.age = 0; this.kids = 0; this.kills = 0; this.fv = 0; this.divT = 0; this.muts = [];
+    this.anc = []; this.age = 0; this.kids = 0; this.kills = 0; this.fv = 0; this.divT = 0; this.muts = [];
     this.alive = true; this.cause = '';
     this.setScale();
   }
@@ -101,7 +101,8 @@ export class Sim {
   }
 
   // Energy ledger for one cell at given local nutrient and light. Everything derives from the phenotype.
-  ledger(c, nutL, L) {
+  // Pass `out` to also receive an itemised breakdown (used by the inspector; the hot path allocates nothing extra).
+  ledger(c, nutL, L, out) {
     const P = c.P, sc = c.sc, S = c.perim * sc, A = c.area * sc * sc;
     const perm = 1 / (1 + 0.7 * P.wall);
     const eff = 0.55 + 0.4 * (1 - Math.exp(-0.45 * P.mito));                 // mitochondria extract more per nutrient
@@ -109,13 +110,19 @@ export class Sim {
     const up = Math.min(K.uptake * S * nutL * perm * eff * stir, nutL * 5);
     const cap = P.plastids ? 1 - Math.exp(-0.5 * P.plastids) : 0.45 * P.thylakoid;
     const photo = cap > 0 ? K.photo * L * cap * Math.pow(A, 0.9) * (1 - 0.35 * Math.min(1, P.wall)) : 0;
-    let cost = K.base * Math.pow(A, 0.75) * (0.6 + 0.4 * P.growth)
-      + K.gene * P.genes
-      + (P.euk ? K.nucleus : 0) + K.mito * P.mito + K.golgi * P.golgi + K.er * P.er + K.plastid * P.plastids + K.thyl * P.thylakoid * A
-      + K.vac * P.vacuole + K.cvac * P.cvac + K.eye * P.eye + K.sense * P.sense + K.pili * P.pili
-      + K.wall * P.wall * S + K.cilia * P.cilia * S + K.mouth * P.mouth * A;
+    const base = K.base * Math.pow(A, 0.75) * (0.6 + 0.4 * P.growth), genes = K.gene * P.genes;
+    const nucleus = P.euk ? K.nucleus : 0, mito = K.mito * P.mito, golgi = K.golgi * P.golgi, er = K.er * P.er;
+    const plastid = K.plastid * P.plastids + K.thyl * P.thylakoid * A, vac = K.vac * P.vacuole, cvac = K.cvac * P.cvac;
+    const senses = K.eye * P.eye + K.sense * P.sense + K.pili * P.pili;
+    const wall = K.wall * P.wall * S, cilia = K.cilia * P.cilia * S, mouth = K.mouth * P.mouth * A;
     const moving = c.thrust > 0.05;
-    if (moving) cost += K.move * c.thrust * c.thrust + K.flag * P.flagella.length;
+    const move = moving ? K.move * c.thrust * c.thrust + K.flag * P.flagella.length : 0;
+    const cost = base + genes + nucleus + mito + golgi + er + plastid + vac + cvac + senses + wall + cilia + mouth + move;
+    if (out) {
+      out.up = up; out.photo = photo; out.cap = cap; out.eff = eff;
+      out.items = { 'Basic upkeep (size)': base, 'DNA maintenance': genes, 'Nucleus': nucleus, 'Mitochondria': mito, 'Golgi + ER': golgi + er, 'Chloroplasts / thylakoids': plastid,
+        'Vacuoles': vac, 'Contractile vacuole pumps': cvac + (P.cvac ? 0.004 * P.cvac * this.params.hypo : 0), 'Senses and pili': senses, 'Cell wall': wall, 'Cilia': cilia, 'Mouth': mouth, 'Swimming': move };
+    }
     return { up, photo, cost, cap, eff, moving };
   }
 
@@ -260,6 +267,7 @@ export class Sim {
       const d = new Cell(this.nextId++, g2, c.x + ax * off * (k ? 1 : -1), c.y + ay * off * (k ? 1 : -1), c);
       d.ang = c.ang + (rng() - 0.5); d.energy = half; d.muts = log;
       for (const m of log) this.mutCounts[m.type]++;
+      d.anc = [{ id: c.id, gen: c.gen, muts: (c.muts || []).slice(0, 6).map((m) => m.type + ' ' + m.kind) }, ...(c.anc || [])].slice(0, 24);
       c.kids++; this.flow.births++; this.totalBirths++;
       out.push(d);
     }

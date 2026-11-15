@@ -479,10 +479,12 @@ export function drawPortrait(ctx, W, H, P, state, opts = {}) {
       for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + gap);
       const over = ys.length ? ys[ys.length - 1] - (H - 20) : 0; if (over > 0) ys = ys.map((y) => y - over);
       list.forEach((a, i) => {
-        const tx = side < 0 ? 16 : W - 16, ty = Math.max(16, ys[i]), tw = ctx.measureText(a.name).width;
-        ctx.strokeStyle = 'rgba(60,60,70,0.55)'; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(side < 0 ? tx + tw + 8 : tx - tw - 8, ty); ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(40,40,50,0.8)'; ctx.beginPath(); ctx.arc(a.x, a.y, 3, 0, TAU); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#23252b'; ctx.textAlign = side < 0 ? 'left' : 'right'; ctx.fillText(a.name, tx, ty);
+        const tx = side < 0 ? 16 : W - 16, ty = Math.max(16, ys[i]), tw = ctx.measureText(a.name).width, hl = opts.highlight && opts.highlight.has(a.name);
+        ctx.strokeStyle = hl ? '#e11d48' : 'rgba(60,60,70,0.55)'; ctx.lineWidth = hl ? 2 : 1; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(side < 0 ? tx + tw + 8 : tx - tw - 8, ty); ctx.stroke();
+        if (hl) { ctx.beginPath(); ctx.arc(a.x, a.y, 11, 0, TAU); ctx.strokeStyle = 'rgba(225,29,72,0.85)'; ctx.lineWidth = 2.5; ctx.stroke(); }
+        ctx.fillStyle = hl ? '#e11d48' : '#fff'; ctx.strokeStyle = 'rgba(40,40,50,0.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(a.x, a.y, hl ? 4.5 : 3, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.font = (hl ? 'bold ' : '') + fs + 'px Georgia, serif'; ctx.fillStyle = hl ? '#be123c' : '#23252b'; ctx.textAlign = side < 0 ? 'left' : 'right'; ctx.fillText(a.name, tx, ty);
+        if (opts.hits) opts.hits.push({ name: a.name, ax: a.x, ay: a.y, lx: side < 0 ? tx : tx - tw, ly: ty - fs, lw: tw, lh: fs * 1.6 });
       });
     };
     lay(left, -1); lay(right, 1);
