@@ -30,3 +30,14 @@ Headless test: `node headless.mjs 20000 1 mixed`
 - Balance is first-pass: in the default mixed seed, photosynthetic flagellates and amoeboid predators dominate.
   Cilia and thick walls are rarely selected. Tuning constants live in `K` at the top of `sim.js`.
 - The earlier particle-chemistry lab (`../protocell`) is separate and unfinished (Phase 2 vesicle self-assembly not accepted).
+
+## Performance and detail
+Only the selected cell is drawn with full organelle detail (`drawCell`, lod 3). Every other cell uses `drawSimple`
+(one flat body path, nucleus and plastid dots, one stroke for all flagella) or a single dot when tiny. The left panel's
+"Full detail for" setting can also give full detail to the 6 or 25 cells nearest the view centre. With 900 cells the whole
+frame costs about 5 ms of JavaScript.
+
+## DNA view
+The inspector draws the selected cell's genome as a rotating double helix: one rung per gene, coloured by gene kind, grouped by kind,
+and brighter, thicker and glowing when the gene is stronger (amplitude x expression, on a fixed scale of 3 so cells are comparable).
+Hover a rung to read the gene.

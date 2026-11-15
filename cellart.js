@@ -490,3 +490,34 @@ export function drawPortrait(ctx, W, H, P, state, opts = {}) {
   ctx.restore();
   return parts;
 }
+
+
+// ---------------------------------------------------------------------------------------
+// Cheap renderer for the crowd (everything that is not selected): one flat body path with a wall/cilia hint,
+// a nucleus dot, a few plastid dots and one stroke for all flagella. No gradients, no per-organelle detail.
+export function drawSimple(ctx, P, state, u) {
+  let S = P._S;
+  if (!S) {
+    const pal = palette(P);
+    S = P._S = { pts: outline(P, 0, 16, 0), pal, plast: Math.min(3, P.plastids || (P.thylakoid > 0.3 ? 2 : 0)) };
+  }
+  const { pts, pal } = S, px = 1 / u, t = state.t || 0;
+  if (P.flagella.length) {
+    ctx.beginPath();
+    const n = P.flagella.length;
+    for (let i = 0; i < n; i++) {
+      const spread = n === 1 ? 0 : i / (n - 1) - 0.5, L = P.flagella[i] * P.a * 0.9, w = Math.sin(t * 9 + i * 2) * 0.35 * L;
+      if (P.euk) { const x0 = P.a * 0.96; ctx.moveTo(x0, 0); ctx.quadraticCurveTo(x0 + L * 0.5, w + spread * L * 0.6, x0 + L, spread * L * 0.9 - w * 0.6); }
+      else { const x0 = -P.a * 0.96; ctx.moveTo(x0, spread * 0.5 * P.b); ctx.quadraticCurveTo(x0 - L * 0.5, w + spread * L * 0.6, x0 - L, spread * L - w * 0.6); }
+    }
+    ctx.lineWidth = 1.6 * px; ctx.strokeStyle = pal.flag; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  if (P.cilia > 0.3) { ctx.lineWidth = 3.4 * px; ctx.strokeStyle = 'rgba(120,170,200,0.45)'; ctx.stroke(); }     // ciliary fuzz
+  ctx.fillStyle = pal.cyto1; ctx.fill();
+  ctx.lineWidth = (P.wall > 0.3 ? 2.6 : 1.3) * px; ctx.strokeStyle = P.wall > 0.3 ? pal.wall : pal.edge; ctx.stroke();
+  for (let k = 0; k < S.plast; k++) { ctx.beginPath(); ctx.ellipse(-0.35 * P.a + k * 0.32 * P.a, (k % 2 ? 1 : -1) * 0.38 * P.b, Math.max(0.12, 0.22 * P.b), Math.max(0.07, 0.12 * P.b), 0, 0, TAU); ctx.fillStyle = '#7cc242'; ctx.fill(); }
+  if (P.euk) { ctx.beginPath(); ctx.arc(0.08 * P.a, 0, Math.min(0.5 * P.b, P.nucleus * P.size * 1.1), 0, TAU); ctx.fillStyle = pal.nuc; ctx.fill(); }
+}

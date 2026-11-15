@@ -1,6 +1,7 @@
 import { Sim, U } from './sim.js';
 import { ARCHETYPES, archetype, describe, clamp, mulberry32 } from './genome.js';
-import { drawCell, drawPortrait } from './cellart.js';
+import { drawCell, drawPortrait, drawSimple } from './cellart.js';
+import { drawDNA, dnaLegend, describeGene, orderGenes } from './dna.js';
 import { partsOf, GENE_INFO } from './info.js';
 import { makeChart } from './charts.js';
 
@@ -154,26 +155,43 @@ function drawWorld(dt) {
   ctx.strokeStyle = 'rgba(120,200,210,0.35)'; ctx.lineWidth = 2 / z; ctx.strokeRect(0, 0, sim.W, sim.H);
 
   const vx0 = cam.x - W / 2 / z - 80, vx1 = cam.x + W / 2 / z + 80, vy0 = cam.y - H / 2 / z - 80, vy1 = cam.y + H / 2 / z + 80;
+  // Only the selected cell (and optionally the few nearest the view centre) get full organelle detail.
+  const budget = +$('detail').value, full = new Set();
+  if (selected && selected.alive) full.add(selected);
+  if (budget > 0) {
+    const cand = [];
+    for (const c of sim.cells) { if (c.x < vx0 || c.x > vx1 || c.y < vy0 || c.y > vy1) continue; if (c.P.a * c.sc * U * z > 16) cand.push(c); }
+    cand.sort((p, q) => Math.hypot(p.x - cam.x, p.y - cam.y) - Math.hypot(q.x - cam.x, q.y - cam.y));
+    for (let i = 0; i < Math.min(budget, cand.length); i++) full.add(cand[i]);
+  }
+  const baseT = [z, 0, 0, z, W / 2 - cam.x * z, H / 2 - cam.y * z];
+  let nFull = 0, nSimple = 0, nDot = 0;
   for (const c of sim.cells) {
     if (c.x < vx0 || c.x > vx1 || c.y < vy0 || c.y > vy1) continue;
-    const P = c.P, half = P.a * c.sc * U * z;
-    const lod = half < 3.5 ? 0 : half < 9 ? 1 : half < 28 ? 2 : 3;
-    ctx.save(); ctx.translate(c.x, c.y);
-    if (half > 5) {                                           // soft halo so cells read against the water
-      const R = Math.max(P.a, P.b) * c.sc * U * 1.9, hg = ctx.createRadialGradient(0, 0, R * 0.25, 0, 0, R);
+    const P = c.P, half = P.a * c.sc * U * z, u = U * c.sc, isFull = full.has(c);
+    const cos = Math.cos(c.ang), sin = Math.sin(c.ang), k = z * u;
+    const ex = (c.x - cam.x) * z + W / 2, ey = (c.y - cam.y) * z + H / 2;
+    const st = { t: tNow + c.id * 0.37, seed: c.id, fv: c.fv, div: c.divT > 0 ? Math.min(1, c.divT / 70) : 0, beat: c.beat ?? 1 };
+    if (isFull) {
+      nFull++;
+      ctx.save(); ctx.setTransform(z, 0, 0, z, ex, ey);                                  // halo in unrotated cell space
+      const R = Math.max(P.a, P.b) * u * 1.9, hg = ctx.createRadialGradient(0, 0, R * 0.25, 0, 0, R);
       hg.addColorStop(0, `hsla(${P.hue * 360},70%,75%,0.22)`); hg.addColorStop(1, `hsla(${P.hue * 360},70%,75%,0)`);
       ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(0, 0, R, 0, 6.28); ctx.fill();
+      ctx.setTransform(k * cos, k * sin, -k * sin, k * cos, ex, ey);
+      drawCell(ctx, P, st, k, { lod: 3 });
+      ctx.restore();
+    } else {
+      ctx.setTransform(k * cos, k * sin, -k * sin, k * cos, ex, ey);
+      if (half < 3.2) { nDot++; drawCell(ctx, P, st, k, { lod: 0 }); } else { nSimple++; drawSimple(ctx, P, st, k); }
     }
-    ctx.rotate(c.ang);
-    const u = U * c.sc;
-    ctx.scale(u, u);
-    drawCell(ctx, P, { t: tNow + c.id * 0.37, seed: c.id, fv: c.fv, div: c.divT > 0 ? Math.min(1, c.divT / 70) : 0, beat: c.beat ?? 1 }, u * z, { lod });
-    ctx.restore();
     if (c === selected) {
-      ctx.save(); ctx.translate(c.x, c.y); ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2 / z; ctx.setLineDash([6 / z, 4 / z]); ctx.lineDashOffset = -tNow * 12 / z;
-      ctx.beginPath(); ctx.arc(0, 0, Math.max(P.a, P.b) * c.sc * U * 1.15 + 6 / z, 0, 6.28); ctx.stroke(); ctx.restore();
+      ctx.setTransform(z, 0, 0, z, ex, ey); ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2 / z; ctx.setLineDash([6 / z, 4 / z]); ctx.lineDashOffset = -tNow * 12 / z;
+      ctx.beginPath(); ctx.arc(0, 0, Math.max(P.a, P.b) * c.sc * U * 1.15 + 6 / z, 0, 6.28); ctx.stroke(); ctx.setLineDash([]);
     }
   }
+  window.__render = { full: nFull, simple: nSimple, dots: nDot };
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   // vignette (screen space)
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.75);
@@ -196,8 +214,23 @@ function renderStatic() {
   $('genes').innerHTML = [...c.g].sort((a, b) => a.k.localeCompare(b.k) || b.v - a.v).map((q) => `<div class="gene" data-k="${q.k}" title="${GENE_INFO[q.k] || ''}"><span>${q.k}</span><i style="width:${Math.min(100, (q.v * q.x / maxv) * 100)}%"></i><span>${q.v.toFixed(2)} × ${q.x.toFixed(2)}</span></div>`).join('');
   $('genes').querySelectorAll('.gene').forEach((el) => { el.onmouseenter = () => { $('geneinfo').textContent = el.dataset.k + ': ' + (GENE_INFO[el.dataset.k] || ''); }; });
   $('muts').textContent = c.muts.length ? 'Mutations at its birth: ' + c.muts.map((m) => `${m.type} (${m.kind})`).join(', ') : 'No mutations at its birth.';
+  $('dnaleg').innerHTML = dnaLegend(c.g); dnaHover = -1; lastRungs = [];
   const parts = partsOf(c.P);
   $('parts').innerHTML = parts.map((p) => `<div class="part"><div class="pn"><i style="background:${p.color}"></i>${p.name}<em>${p.level}</em></div><p>${p.what}</p><p class="cost">${p.cost}</p></div>`).join('') || '<div class="hint">A very simple cell with no specialised structures.</div>';
+}
+// ---------------------------------------------------------------- DNA helix
+const dnaCv = $('dna'), dctx = dnaCv.getContext('2d');
+let dnaHover = -1, lastRungs = [];
+dnaCv.addEventListener('pointermove', (e) => {
+  const r = dnaCv.getBoundingClientRect(), x = (e.clientX - r.left) * (dnaCv.width / r.width); let best = -1, bd = 12;
+  for (const g of lastRungs) { const d = Math.abs(g.x - x); if (d < bd) { bd = d; best = g.i; } }
+  dnaHover = best;
+  if (best >= 0) $('dnainfo').textContent = describeGene(lastRungs[best].q);
+});
+dnaCv.addEventListener('pointerleave', () => { dnaHover = -1; });
+function drawDNAView() {
+  if (!selected) { dctx.fillStyle = '#0b1620'; dctx.fillRect(0, 0, dnaCv.width, dnaCv.height); return; }
+  lastRungs = drawDNA(dctx, dnaCv.width, dnaCv.height, selected.g, tNow, dnaHover);
 }
 let lastInspect = 0;
 function drawInspector() {
@@ -270,6 +303,7 @@ function census() {
 // ---------------------------------------------------------------- main loop
 let lastCensus = 0, autoPicked = false;
 function frame(ms) {
+  const f0 = performance.now();
   const dt = Math.min(0.1, (ms - lastFrameT) / 1000 || 0.016); lastFrameT = ms; tNow = ms / 1000;
   if (!paused) {
     const n = +speed.value;
@@ -282,9 +316,11 @@ function frame(ms) {
     const big = [...sim.cells].filter((c) => c.P.euk).sort((a, b) => b.area - a.area)[0] || sim.cells[0];
     if (big) select(big);
   }
-  const p0 = performance.now(); drawWorld(dt); const p1 = performance.now(); drawInspector(); const p2 = performance.now();
+  const p0 = performance.now(); drawWorld(dt); const p1 = performance.now(); drawInspector(); drawDNAView(); const p2 = performance.now();
   window.__perf = { world: p1 - p0, insp: p2 - p1 };
-  if (ms - lastCensus > 700) { lastCensus = ms; census(); }
+  const c0 = performance.now(); let censusMs = 0;
+  if (ms - lastCensus > 700) { lastCensus = ms; census(); censusMs = performance.now() - c0; }
+  window.__perf.total = performance.now() - f0; window.__perf.census = censusMs; window.__perf.sim = p0 - f0;
   requestAnimationFrame(frame);
 }
 renderStatic();
