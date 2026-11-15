@@ -24,18 +24,34 @@ fitAll();
 const toWorld = (sx, sy) => { const r = cv.getBoundingClientRect(); return [cam.x + (sx - r.left - r.width / 2) / cam.z, cam.y + (sy - r.top - r.height / 2) / cam.z]; };
 
 let drag = null;
-cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false }; cv.setPointerCapture(e.pointerId); cv.classList.add('drag'); });
+const pointers = new Map();           // active pointers, for pinch zoom on touch screens
+let pinch = null, pinchUsed = false;
+cv.addEventListener('pointerdown', (e) => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  cv.setPointerCapture(e.pointerId); cv.classList.add('drag');
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: cam.z }; pinchUsed = true; drag = null; cam.follow = false;
+  } else if (pointers.size === 1) { pinchUsed = false; drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false }; }
+});
 cv.addEventListener('pointermove', (e) => {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    cam.z = clamp(pinch.z * (d / pinch.d), 0.25, 20); return;
+  }
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) + Math.abs(dy) > 4) { drag.moved = true; cam.follow = false; }
   if (drag.moved) { cam.x = drag.cx - dx / cam.z; cam.y = drag.cy - dy / cam.z; }
 });
-cv.addEventListener('pointerup', (e) => {
-  cv.classList.remove('drag');
-  if (drag && !drag.moved) pick(e.clientX, e.clientY);
-  drag = null;
-});
+const endPointer = (e) => {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = null;
+  if (pointers.size === 0) { cv.classList.remove('drag'); if (drag && !drag.moved && !pinchUsed) pick(e.clientX, e.clientY); drag = null; pinchUsed = false; }
+};
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('dblclick', (e) => { pick(e.clientX, e.clientY); if (selected) zoomTo(selected); });
 cv.addEventListener('wheel', (e) => {
   e.preventDefault();

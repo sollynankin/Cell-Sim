@@ -1,5 +1,7 @@
 # Cell Evolution
 
+**Live:** https://sollynankin.github.io/Cell-Sim/  (GitHub Pages; works on desktop and touch screens)
+
 Detailed single-cell organisms that evolve in a pool. Every visible structure (nucleus, nucleolus,
 chloroplasts, mitochondria with cristae, Golgi stacks, ER, vacuoles, contractile vacuoles, eyespot,
 cell wall, flagella, cilia, pili, oral groove, pseudopods, bacterial DNA, ribosomes) is produced by
@@ -41,3 +43,10 @@ frame costs about 5 ms of JavaScript.
 The inspector draws the selected cell's genome as a rotating double helix: one rung per gene, coloured by gene kind, grouped by kind,
 and brighter, thicker and glowing when the gene is stronger (amplitude x expression, on a fixed scale of 3 so cells are comparable).
 Hover a rung to read the gene.
+
+## Deploying (GitHub Pages)
+The app is static: plain ES modules, no bundler. `npm run build` copies the files into `dist/`; `.github/workflows/pages.yml`
+runs a headless smoke test, builds, and deploys `dist/` on every push to `main`.
+
+One-time setup in the repo on GitHub: **Settings > Pages > Build and deployment > Source: GitHub Actions**.
+The site then lives at `https://<user>.github.io/<repo>/`. Any other static host works too: upload the contents of `dist/`.

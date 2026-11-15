@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cell Evolution</title>
+<meta name="description" content="Single-celled organisms with nuclei, organelles, walls, flagella and cilia evolve in a pool. Every structure is drawn from the cell's genome.">
+<meta name="theme-color" content="#0a1117">
+<meta property="og:title" content="Cell Evolution">
+<meta property="og:description" content="Watch detailed single-celled organisms evolve. Click a cell to see its organelles, DNA and energy budget.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
   :root { --bg:#0a1117; --panel:#111b24; --panel2:#17242e; --line:#223340; --text:#dfe9f0; --dim:#8196a6; --accent:#5fd6c8; --warn:#ffb454; }
   * { box-sizing: border-box; }
@@ -15,6 +21,11 @@
   .chip b { color:var(--text); font-variant-numeric:tabular-nums; }
   .app { display:grid; grid-template-columns:236px minmax(0,1fr) 430px; gap:10px; padding:10px 14px 24px; align-items:start; }
   @media (max-width:1300px) { .app { grid-template-columns:230px minmax(0,1fr); } .right { grid-column:1 / -1; } }
+  @media (max-width:760px) {
+    .app { grid-template-columns:minmax(0,1fr); padding:8px; gap:8px; } .mid { order:-1; } .right { grid-column:auto; }
+    header { padding:6px 8px; } .chips { margin-left:0; } .charts { grid-template-columns:1fr; }
+    #world { max-height:62vh; } .tiles { grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); }
+  }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
   .panel h2 { margin:0 0 8px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600; display:flex; align-items:center; gap:8px; }
   .panel h2 .tools { margin-left:auto; display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; font-weight:400; }
