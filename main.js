@@ -208,13 +208,13 @@ function drawWorld(dt) {
 const pctx = $('portrait').getContext('2d');
 function renderStatic() {
   const c = selected;
-  if (!c) { $('parts').innerHTML = '<div class="hint">Select a cell to see what each part is for.</div>'; $('genes').innerHTML = ''; $('desc').textContent = 'Click a cell in the pool.'; $('muts').textContent = ''; return; }
+  if (!c) { drawDNAView(); $('parts').innerHTML = '<div class="hint">Select a cell to see what each part is for.</div>'; $('genes').innerHTML = ''; $('desc').textContent = 'Click a cell in the pool.'; $('muts').textContent = ''; return; }
   $('desc').textContent = describe(c.P).replace(/^./, (m) => m.toUpperCase());
   const maxv = Math.max(1, ...c.g.map((q) => q.v * q.x));
   $('genes').innerHTML = [...c.g].sort((a, b) => a.k.localeCompare(b.k) || b.v - a.v).map((q) => `<div class="gene" data-k="${q.k}" title="${GENE_INFO[q.k] || ''}"><span>${q.k}</span><i style="width:${Math.min(100, (q.v * q.x / maxv) * 100)}%"></i><span>${q.v.toFixed(2)} × ${q.x.toFixed(2)}</span></div>`).join('');
   $('genes').querySelectorAll('.gene').forEach((el) => { el.onmouseenter = () => { $('geneinfo').textContent = el.dataset.k + ': ' + (GENE_INFO[el.dataset.k] || ''); }; });
   $('muts').textContent = c.muts.length ? 'Mutations at its birth: ' + c.muts.map((m) => `${m.type} (${m.kind})`).join(', ') : 'No mutations at its birth.';
-  $('dnaleg').innerHTML = dnaLegend(c.g); dnaHover = -1; lastRungs = [];
+  $('dnaleg').innerHTML = dnaLegend(c.g); dnaHover = -1; lastRungs = []; drawDNAView();
   const parts = partsOf(c.P);
   $('parts').innerHTML = parts.map((p) => `<div class="part"><div class="pn"><i style="background:${p.color}"></i>${p.name}<em>${p.level}</em></div><p>${p.what}</p><p class="cost">${p.cost}</p></div>`).join('') || '<div class="hint">A very simple cell with no specialised structures.</div>';
 }
@@ -224,13 +224,14 @@ let dnaHover = -1, lastRungs = [];
 dnaCv.addEventListener('pointermove', (e) => {
   const r = dnaCv.getBoundingClientRect(), x = (e.clientX - r.left) * (dnaCv.width / r.width); let best = -1, bd = 12;
   for (const g of lastRungs) { const d = Math.abs(g.x - x); if (d < bd) { bd = d; best = g.i; } }
-  dnaHover = best;
+  if (best !== dnaHover) { dnaHover = best; drawDNAView(); }
   if (best >= 0) $('dnainfo').textContent = describeGene(lastRungs[best].q);
 });
-dnaCv.addEventListener('pointerleave', () => { dnaHover = -1; });
+dnaCv.addEventListener('pointerleave', () => { if (dnaHover !== -1) { dnaHover = -1; drawDNAView(); } });
+// The helix is static: it is redrawn only when the selection or the hovered rung changes.
 function drawDNAView() {
-  if (!selected) { dctx.fillStyle = '#0b1620'; dctx.fillRect(0, 0, dnaCv.width, dnaCv.height); return; }
-  lastRungs = drawDNA(dctx, dnaCv.width, dnaCv.height, selected.g, tNow, dnaHover);
+  if (!selected) { dctx.fillStyle = '#0b1620'; dctx.fillRect(0, 0, dnaCv.width, dnaCv.height); lastRungs = []; return; }
+  lastRungs = drawDNA(dctx, dnaCv.width, dnaCv.height, selected.g, 0.9, dnaHover);
 }
 let lastInspect = 0;
 function drawInspector() {
@@ -258,6 +259,7 @@ const charts = [];
 function addChart(id, legId, cfg, series) {
   cfg.series = ser(series); cfg.canvas = $(id); cfg.getData = () => sim.hist;
   const ch = makeChart(cfg); charts.push(ch);
+  new ResizeObserver(() => ch.draw()).observe(cfg.canvas);
   $(legId).innerHTML = cfg.series.map((s, i) => `<label data-i="${i}"><input type="checkbox" checked hidden><i style="background:${s.color}"></i>${s.label}</label>`).join('');
   $(legId).querySelectorAll('label').forEach((el) => { el.onclick = (e) => { e.preventDefault(); const s = cfg.series[+el.dataset.i]; s.on = !s.on; el.classList.toggle('off', !s.on); ch.draw(); }; });
 }
@@ -316,7 +318,7 @@ function frame(ms) {
     const big = [...sim.cells].filter((c) => c.P.euk).sort((a, b) => b.area - a.area)[0] || sim.cells[0];
     if (big) select(big);
   }
-  const p0 = performance.now(); drawWorld(dt); const p1 = performance.now(); drawInspector(); drawDNAView(); const p2 = performance.now();
+  const p0 = performance.now(); drawWorld(dt); const p1 = performance.now(); drawInspector(); const p2 = performance.now();
   window.__perf = { world: p1 - p0, insp: p2 - p1 };
   const c0 = performance.now(); let censusMs = 0;
   if (ms - lastCensus > 700) { lastCensus = ms; census(); censusMs = performance.now() - c0; }
@@ -325,3 +327,50 @@ function frame(ms) {
 }
 renderStatic();
 requestAnimationFrame(frame);
+
+
+// ---------------------------------------------------------------- chart panels: reorder / minimise / enlarge
+const chartsEl = $('charts'), LS_KEY = 'cellevo.charts.v1';
+const DEFAULT_ORDER = [...chartsEl.children].map((e) => e.dataset.id);
+let layout = { order: DEFAULT_ORDER.slice(), min: {}, big: {} };
+try { const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (saved && Array.isArray(saved.order)) { layout = { order: saved.order.filter((i) => DEFAULT_ORDER.includes(i)), min: saved.min || {}, big: saved.big || {} }; for (const i of DEFAULT_ORDER) if (!layout.order.includes(i)) layout.order.push(i); } } catch (e) { /* storage may be blocked */ }
+const panelOf = (id) => chartsEl.querySelector(`.cp[data-id="${id}"]`);
+const saveLayout = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(layout)); } catch (e) { /* ignore */ } };
+function applyLayout() {
+  for (const id of layout.order) chartsEl.appendChild(panelOf(id));
+  for (const id of DEFAULT_ORDER) {
+    const p = panelOf(id); p.classList.toggle('min', !!layout.min[id]); p.classList.toggle('big', !!layout.big[id]);
+    p.querySelector('[data-act=min]').textContent = layout.min[id] ? '+' : '\u2013';
+    p.querySelector('[data-act=min]').title = layout.min[id] ? 'Restore' : 'Minimise';
+    p.querySelector('[data-act=max]').textContent = layout.big[id] ? '\u2921' : '\u2922';
+    p.querySelector('[data-act=max]').title = layout.big[id] ? 'Shrink' : 'Enlarge';
+  }
+  charts.forEach((c) => c.draw());
+}
+chartsEl.querySelectorAll('.cp').forEach((p) => {
+  const id = p.dataset.id;
+  p.querySelector('[data-act=min]').onclick = () => { layout.min[id] = !layout.min[id]; if (layout.min[id]) layout.big[id] = false; saveLayout(); applyLayout(); };
+  p.querySelector('[data-act=max]').onclick = () => { layout.big[id] = !layout.big[id]; if (layout.big[id]) layout.min[id] = false; saveLayout(); applyLayout(); };
+  p.querySelector('h3').ondblclick = () => p.querySelector('[data-act=min]').click();
+  // dragging starts only from the grip, so clicking charts or controls never drags the panel
+  const grip = p.querySelector('.grip');
+  grip.onmousedown = () => { p.draggable = true; };
+  p.addEventListener('dragend', () => { p.draggable = false; p.classList.remove('dragging'); chartsEl.querySelectorAll('.over').forEach((e) => e.classList.remove('over')); layout.order = [...chartsEl.children].map((e) => e.dataset.id); saveLayout(); });
+  p.addEventListener('dragstart', (e) => { p.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); });
+});
+chartsEl.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  const drag = chartsEl.querySelector('.dragging'), over = e.target.closest('.cp');
+  chartsEl.querySelectorAll('.over').forEach((x) => x.classList.remove('over'));
+  if (!drag || !over || over === drag) return;
+  over.classList.add('over');
+  const r = over.getBoundingClientRect(), d = drag.getBoundingClientRect();
+  const sameRow = Math.abs(r.top - d.top) < 40 && !over.classList.contains('big') && !drag.classList.contains('big');
+  const before = sameRow ? e.clientX < r.left + r.width / 2 : e.clientY < r.top + r.height / 2;
+  chartsEl.insertBefore(drag, before ? over : over.nextSibling);
+});
+chartsEl.addEventListener('drop', (e) => e.preventDefault());
+$('ch-collapse').onclick = () => { for (const id of DEFAULT_ORDER) { layout.min[id] = true; layout.big[id] = false; } saveLayout(); applyLayout(); };
+$('ch-expandall').onclick = () => { layout.min = {}; saveLayout(); applyLayout(); };
+$('ch-reset').onclick = () => { layout = { order: DEFAULT_ORDER.slice(), min: {}, big: {} }; saveLayout(); applyLayout(); };
+applyLayout();

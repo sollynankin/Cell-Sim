@@ -35,8 +35,18 @@
   .plan { display:grid; grid-template-columns:1fr auto; gap:6px; padding:3px 0; cursor:pointer; border-bottom:1px solid #1a2a36; } .plan:hover { color:var(--accent); }
   .tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:8px; }
   .tile { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:6px 9px; } .tile small { display:block; color:var(--dim); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; } .tile b { font-size:17px; font-variant-numeric:tabular-nums; font-weight:600; } .tile em { font-style:normal; color:var(--dim); font-size:11px; margin-left:3px; }
-  .charts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } @media (max-width:1000px) { .charts { grid-template-columns:1fr; } }
-  .charts .panel { margin-bottom:0; } canvas.chart { width:100%; height:170px; display:block; }
+  .charthead { display:flex; align-items:center; gap:8px; margin:4px 2px 8px; } .charthead h2 { margin:0; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+  .charthead .tools { margin-left:auto; display:flex; gap:6px; align-items:center; } .charthead button { padding:2px 8px; font-size:11.5px; }
+  .charts { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:10px; align-items:start; }
+  .cp { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:7px 10px 10px; min-width:0; transition:border-color .15s; }
+  .cp:hover { border-color:#2d4455; } .cp.big { grid-column:1 / -1; } .cp.big canvas.chart { height:360px; } .cp.min .cpb { display:none; } .cp.min .cph { margin-bottom:0; }
+  .cp.dragging { opacity:.35; } .cp.over { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .cph { display:flex; align-items:center; gap:8px; margin-bottom:6px; min-height:24px; }
+  .cph h3 { margin:0; font-size:12.5px; font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cph .tools { display:flex; gap:8px; align-items:center; font-size:11px; color:var(--dim); }
+  .grip { cursor:grab; color:#5d7384; user-select:none; font-size:15px; line-height:1; padding:0 2px; } .grip:active { cursor:grabbing; }
+  .ib { padding:0 7px; line-height:20px; height:22px; min-width:24px; font-size:13px; color:var(--dim); } .ib:hover { color:var(--text); }
+  canvas.chart { width:100%; height:180px; display:block; }
   .legend { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:11px; color:var(--dim); margin-top:6px; } .legend label { cursor:pointer; display:inline-flex; align-items:center; gap:4px; user-select:none; } .legend label.off { opacity:.35; } .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; }
   .hint { color:var(--dim); font-size:12px; }
   .part { border-top:1px solid #1b2b37; padding:7px 0 6px; } .part:first-child { border-top:0; }
@@ -101,33 +111,45 @@
       <h2>Body plans in the pool (click to inspect one)</h2>
       <div id="plans"></div>
     </div>
-    <div class="charts">
-      <div class="panel">
-        <h2>Features in the population
+    <div class="charthead">
+      <h2>Charts</h2>
+      <span class="tools"><span class="hint">drag the grip to reorder</span>
+        <button id="ch-collapse">Minimise all</button><button id="ch-expandall">Restore all</button><button id="ch-reset">Reset layout</button></span>
+    </div>
+    <div class="charts" id="charts">
+      <section class="cp" data-id="features">
+        <header class="cph"><span class="grip" title="Drag to reorder">&#10303;</span><h3>Features in the population</h3>
           <span class="tools"><label class="chk"><input type="checkbox" id="ch-auto" checked>auto-scale</label>
-            <select class="mini" id="ch-smooth"><option value="1">raw</option><option value="5" selected>smooth</option><option value="15">smoother</option></select></span></h2>
-        <canvas class="chart" id="chart-features"></canvas><div class="legend" id="leg-features"></div>
-      </div>
-      <div class="panel">
-        <h2>Population <span class="tools"><label class="chk"><input type="checkbox" id="ch-fill" checked>fill</label></span></h2>
-        <canvas class="chart" id="chart-pop"></canvas><div class="legend" id="leg-pop"></div>
-      </div>
-      <div class="panel">
-        <h2>Births and deaths per 30 ticks</h2>
-        <canvas class="chart" id="chart-demo"></canvas><div class="legend" id="leg-demo"></div>
-      </div>
-      <div class="panel">
-        <h2>Where the energy comes from</h2>
-        <canvas class="chart" id="chart-energy"></canvas><div class="legend" id="leg-energy"></div>
-      </div>
-      <div class="panel">
-        <h2>Diversity: effective number of body plans</h2>
-        <canvas class="chart" id="chart-div"></canvas><div class="legend" id="leg-div"></div>
-      </div>
-      <div class="panel">
-        <h2>Traits: average size and genome length</h2>
-        <canvas class="chart" id="chart-traits"></canvas><div class="legend" id="leg-traits"></div>
-      </div>
+            <select class="mini" id="ch-smooth"><option value="1">raw</option><option value="5" selected>smooth</option><option value="15">smoother</option></select></span>
+          <button class="ib" data-act="min" title="Minimise">&#8211;</button><button class="ib" data-act="max" title="Enlarge">&#10530;</button></header>
+        <div class="cpb"><canvas class="chart" id="chart-features"></canvas><div class="legend" id="leg-features"></div></div>
+      </section>
+      <section class="cp" data-id="pop">
+        <header class="cph"><span class="grip" title="Drag to reorder">&#10303;</span><h3>Population</h3>
+          <span class="tools"><label class="chk"><input type="checkbox" id="ch-fill" checked>fill</label></span>
+          <button class="ib" data-act="min" title="Minimise">&#8211;</button><button class="ib" data-act="max" title="Enlarge">&#10530;</button></header>
+        <div class="cpb"><canvas class="chart" id="chart-pop"></canvas><div class="legend" id="leg-pop"></div></div>
+      </section>
+      <section class="cp" data-id="demo">
+        <header class="cph"><span class="grip" title="Drag to reorder">&#10303;</span><h3>Births and deaths per 30 ticks</h3>
+          <button class="ib" data-act="min" title="Minimise">&#8211;</button><button class="ib" data-act="max" title="Enlarge">&#10530;</button></header>
+        <div class="cpb"><canvas class="chart" id="chart-demo"></canvas><div class="legend" id="leg-demo"></div></div>
+      </section>
+      <section class="cp" data-id="energy">
+        <header class="cph"><span class="grip" title="Drag to reorder">&#10303;</span><h3>Where the energy comes from</h3>
+          <button class="ib" data-act="min" title="Minimise">&#8211;</button><button class="ib" data-act="max" title="Enlarge">&#10530;</button></header>
+        <div class="cpb"><canvas class="chart" id="chart-energy"></canvas><div class="legend" id="leg-energy"></div></div>
+      </section>
+      <section class="cp" data-id="div">
+        <header class="cph"><span class="grip" title="Drag to reorder">&#10303;</span><h3>Diversity of body plans</h3>
+          <button class="ib" data-act="min" title="Minimise">&#8211;</button><button class="ib" data-act="max" title="Enlarge">&#10530;</button></header>
+        <div class="cpb"><canvas class="chart" id="chart-div"></canvas><div class="legend" id="leg-div"></div></div>
+      </section>
+      <section class="cp" data-id="traits">
+        <header class="cph"><span class="grip" title="Drag to reorder">&#10303;</span><h3>Traits: size and genome length</h3>
+          <button class="ib" data-act="min" title="Minimise">&#8211;</button><button class="ib" data-act="max" title="Enlarge">&#10530;</button></header>
+        <div class="cpb"><canvas class="chart" id="chart-traits"></canvas><div class="legend" id="leg-traits"></div></div>
+      </section>
     </div>
   </div>
   <div class="right">
