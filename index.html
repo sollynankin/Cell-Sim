@@ -48,6 +48,22 @@
   .chipbtn { display:inline-block; margin:2px 4px 2px 0; padding:1px 8px; border-radius:999px; border:1px solid var(--line); background:var(--panel2); cursor:pointer; font-size:12px; } .chipbtn:hover { border-color:var(--accent); color:var(--accent); }
   .part.hl { background:rgba(225,29,72,.13); box-shadow:0 0 0 1px rgba(225,29,72,.5) inset; border-radius:6px; } .part { padding-left:4px; padding-right:4px; transition:background .15s; }
   #spark { width:100%; height:100px; border-radius:6px; background:#0b1620; display:block; }
+  dialog#designer { border:1px solid var(--line); border-radius:14px; background:var(--panel); color:var(--text); padding:0; width:min(1120px,96vw); max-height:94vh; overflow:hidden; } dialog#designer::backdrop { background:rgba(2,8,12,.72); backdrop-filter:blur(2px); }
+  .dz { display:flex; flex-direction:column; max-height:94vh; } .dzh { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line); } .dzh h2 { margin:0; font-size:14px; letter-spacing:.04em; }
+  .dzh input { flex:1; max-width:300px; background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:7px; padding:5px 9px; font:inherit; font-weight:600; } .dzh .ib { margin-left:auto; }
+  .dzbody { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:14px; padding:12px 14px 14px; overflow:auto; } @media (max-width:820px) { .dzbody { grid-template-columns:1fr; } }
+  .dzcols, .dzrow { display:grid; grid-template-columns:12px 80px minmax(46px,1fr) 34px minmax(44px,60px) 36px 20px; gap:5px; align-items:center; } .dzcols { font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-top:8px; padding-bottom:3px; }
+  #dz-genes { max-height:340px; overflow-y:auto; overflow-x:hidden; border:1px solid var(--line); border-radius:8px; padding:4px 6px; background:#0d1822; } .dzrow { padding:2px 0; } .dzrow select { padding:2px 4px; font-size:12px; } .dzrow .dot { width:11px; height:11px; border-radius:3px; }
+  .dzrow .val { font-size:11.5px; font-weight:500; color:var(--dim); text-align:right; font-variant-numeric:tabular-nums; } .dzrow:hover { background:rgba(95,214,200,.06); border-radius:5px; }
+  #dz-json { width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:7px; padding:6px; font:11px ui-monospace,Consolas,monospace; resize:vertical; }
+  #dz-portrait { width:100%; border-radius:8px; background:#fbfaf6; display:block; } #dz-dna { width:100%; height:130px; border-radius:8px; margin-top:8px; display:block; cursor:crosshair; }
+  .dzright h4 { margin:10px 0 6px; font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+  .dzbrow { display:grid; grid-template-columns:104px 1fr 1fr 46px; gap:6px 8px; align-items:center; font-size:12px; margin:4px 0; } .dzbrow em { grid-column:2 / -1; font-style:normal; color:var(--dim); font-size:11px; margin-top:-3px; }
+  .dzbrow .track { height:7px; background:#0d1a22; border-radius:4px; overflow:hidden; } .dzbrow .track i { display:block; height:100%; border-radius:4px; } .dzbrow b { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .dzw { background:rgba(255,180,84,.09); border-left:3px solid var(--warn); padding:5px 9px; margin:5px 0; border-radius:0 6px 6px 0; font-size:12px; color:#e8d3b0; }
+  .dzadd { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-top:12px; padding-top:10px; border-top:1px solid var(--line); } .dzadd label { display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--dim); } .dzadd input[type=number] { width:70px; background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:7px; padding:5px 7px; font:inherit; }
+  button.primary { background:var(--accent); color:#06231f; border-color:var(--accent); font-weight:700; margin-left:auto; } button.primary:hover { filter:brightness(1.1); }
+  .dztoast { position:sticky; bottom:0; margin-top:8px; padding:6px 10px; border-radius:7px; background:#123b36; color:#bff3ea; font-size:12px; opacity:0; transition:opacity .2s; } .dztoast.on { opacity:1; }
   #portrait { width:100%; cursor:pointer; border-radius:8px; background:#fbfaf6; display:block; }
   .desc { color:#b7c7d3; margin:8px 0 4px; font-size:13px; }
   .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-variant-numeric:tabular-nums; } .kv span:nth-child(odd) { color:var(--dim); }
@@ -103,13 +119,14 @@
       <h2>Environment</h2>
       <label class="s"><span>Light <b id="v-light"></b></span><input id="light" type="range" min="0" max="2" step="0.05" value="1"></label>
       <label class="s"><span>Nutrient vents <b id="v-nutrient"></b></span><input id="nutrient" type="range" min="0" max="2" step="0.05" value="1"></label>
-      <label class="s"><span>Dilute water (bursting) <b id="v-hypo"></b></span><input id="hypo" type="range" min="0" max="1" step="0.05" value="0.35"></label>
-      <label class="s"><span>Mutation rate <b id="v-mutation"></b></span><input id="mutation" type="range" min="0" max="0.25" step="0.005" value="0.04"></label>
+      <label class="s"><span>Dilute water (bursting) <b id="v-hypo"></b></span><input id="hypo" type="range" min="0" max="1" step="0.05" value="0.4"></label>
+      <label class="s"><span>Mutation rate <b id="v-mutation"></b></span><input id="mutation" type="range" min="0" max="0.25" step="0.005" value="0.05"></label>
       <div class="row"><button id="dark">Darkness</button><button id="crash">Nutrient crash</button><button id="mutagen">Mutagen pulse</button></div>
     </div>
     <div class="panel">
       <h2>Inoculate</h2>
       <div class="row"><select id="inoc"></select><button id="add">Add 12</button></div>
+      <div class="row"><button id="open-designer" style="width:100%">&#10010; Design your own cell…</button></div>
       <div class="hint">Drops founders of a hand-written genome into the water. They are ordinary cells: they live or die by the same costs.</div>
     </div>
     <div class="panel">
@@ -177,7 +194,7 @@
   <div class="right" id="right">
     <div class="panel insp">
       <div class="insph"><h2>Inspector</h2><span class="sel" id="selname">nothing selected</span>
-        <span class="tools"><button class="ib" id="in-prev" title="Previous cell with this body plan">&#9664;</button><button class="ib" id="in-next" title="Next cell with this body plan">&#9654;</button><button class="ib" id="in-follow" title="Zoom to this cell and follow it">&#9678;</button><button class="ib" id="in-png" title="Save the portrait as a PNG">&#11015;</button></span></div>
+        <span class="tools"><button class="ib" id="in-prev" title="Previous cell with this body plan">&#9664;</button><button class="ib" id="in-next" title="Next cell with this body plan">&#9654;</button><button class="ib" id="in-follow" title="Zoom to this cell and follow it">&#9678;</button><button class="ib" id="in-design" title="Open this cell's genome in the designer">&#9998;</button><button class="ib" id="in-png" title="Save the portrait as a PNG">&#11015;</button></span></div>
       <canvas id="portrait" width="900" height="660"></canvas>
       <div class="portbar"><label class="chk"><input type="checkbox" id="in-labels" checked>labels</label><span class="hint">Click a label to read about it. Hover a structure in the Structures tab to find it here.</span></div>
       <div class="desc" id="desc">Click a cell in the pool.</div>
@@ -205,6 +222,37 @@
     </div>
   </div>
 </div>
+<dialog id="designer">
+  <div class="dz">
+    <header class="dzh"><h2>Cell designer</h2><input id="dz-name" value="My cell" maxlength="40" aria-label="Design name"><span class="hint" id="dz-count"></span><button class="ib" id="dz-close" title="Close">&#10005;</button></header>
+    <div class="dzbody">
+      <div class="dzleft">
+        <div class="row"><select id="dz-template"></select><button id="dz-load">Load template</button><button id="dz-blank">Blank</button></div>
+        <div class="dzcols"><span></span><span>gene</span><span>amplitude (strength)</span><span></span><span>expression</span><span></span><span></span></div>
+        <div id="dz-genes"></div>
+        <div class="row"><select id="dz-newkind"></select><button id="dz-add">+ Add gene</button><button id="dz-mutate" title="Apply a burst of random mutations to this design">Mutate it</button></div>
+        <div class="geneinfo" id="dz-kinddesc">Hover a gene to read what it does. Genes of the same kind add up, and each flagellum gene is one flagellum.</div>
+        <div class="row"><select id="dz-lib"></select><button id="dz-save">Save to library</button><button id="dz-del">Delete saved</button></div>
+        <div class="row"><button id="dz-export">Copy as JSON</button><button id="dz-import">Load from JSON</button></div>
+        <textarea id="dz-json" rows="3" placeholder="Paste a design here and press Load from JSON"></textarea>
+      </div>
+      <div class="dzright">
+        <canvas id="dz-portrait" width="900" height="620"></canvas>
+        <div class="portbar"><label class="chk"><input type="checkbox" id="dz-labels" checked>labels</label><span class="desc" id="dz-desc"></span></div>
+        <canvas id="dz-dna" width="860" height="300"></canvas>
+        <h4>Can it make a living?</h4>
+        <div id="dz-budget"></div>
+        <div id="dz-warn"></div>
+        <div class="dzadd">
+          <label>How many <input id="dz-n" type="number" min="1" max="100" value="12"></label>
+          <label>Where <select id="dz-place"><option value="camera">Near the camera</option><option value="vents">At the vents</option><option value="surface">Near the surface</option><option value="everywhere">Everywhere</option></select></label>
+          <button id="dz-spawn" class="primary">Add to the pool</button>
+        </div>
+        <div class="dztoast" id="dz-toast"></div>
+      </div>
+    </div>
+  </div>
+</dialog>
 <script type="module" src="main.js"></script>
 </body>
 </html>

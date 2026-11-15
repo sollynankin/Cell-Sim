@@ -98,7 +98,7 @@ export function mutate(genome, rate, rng, log) {
       note('deletion', q.k); g.splice(i, 1);
     }
   }
-  if (rng() < rate * 0.4 && g.length < 60) {                            // insertion of a novel gene
+  if (rng() < rate * 0.8 && g.length < 60) {                            // insertion of a novel gene
     const k = KINDS[Math.floor(rng() * KINDS.length)];
     g.push(gene(k, NEW_KIND_AMP[k] * (0.2 + rng() * 0.8), 1)); note('insertion', k);
   }
@@ -112,22 +112,22 @@ export function archetype(name) {
   const G = (...a) => a.map(([k, v, x]) => gene(k, v, x ?? 1));
   switch (name) {
     case 'Chlamydomonas-like':
-      return G(['size', 0.5], ['elong', 0.2], ['taper', 0.05], ['nucleus', 1.2], ['mito', 3], ['chloro', 1], ['vacuole', 0.1],
-        ['cvac', 2], ['golgi', 1], ['er', 0.5], ['flag', 1.4], ['flag', 1.4], ['eye', 0.9], ['wall', 0.55], ['hue', 0.34], ['growth', 0.5]);
+      return G(['size', 0.5], ['elong', 0.2], ['taper', 0.05], ['nucleus', 1.2], ['mito', 2], ['chloro', 1], ['vacuole', 0.1],
+        ['cvac', 1], ['golgi', 1], ['er', 0.5], ['flag', 1.2], ['flag', 1.2], ['eye', 0.9], ['wall', 0.3], ['hue', 0.34], ['growth', 0.5]);
     case 'Euglena-like':
-      return G(['size', 0.75], ['elong', 1.0], ['taper', 0.6], ['nucleus', 1.2], ['mito', 2], ['chloro', 6], ['golgi', 1], ['er', 0.6],
-        ['flag', 2.4], ['eye', 0.9], ['flex', 0.35], ['cvac', 1], ['hue', 0.26], ['growth', 0.5]);
+      return G(['size', 0.75], ['elong', 1.0], ['taper', 0.6], ['nucleus', 1.2], ['mito', 2], ['chloro', 3], ['golgi', 1], ['er', 0.6],
+        ['flag', 2.0], ['eye', 0.9], ['flex', 0.35], ['cvac', 1], ['hue', 0.26], ['growth', 0.5]);
     case 'Paramecium-like':
       return G(['size', 1.0], ['elong', 0.75], ['taper', 0.2], ['nucleus', 2.0], ['mito', 3], ['cvac', 2], ['cilia', 1.0],
         ['mouth', 0.9], ['golgi', 1], ['hue', 0.55], ['flex', 0.1], ['growth', 0.5]);
     case 'Bacterium':
-      return G(['size', 0.25], ['elong', 0.9], ['box', 1.0], ['wall', 0.9], ['pili', 0.9], ['flag', 1.3], ['flag', 1.1], ['flag', 1.5],
+      return G(['size', 0.25], ['elong', 0.9], ['box', 1.0], ['wall', 0.4], ['pili', 0.4], ['flag', 0.9], ['flag', 0.8], ['flag', 1.0],
         ['hue', 0.07], ['growth', 0.5]);
     case 'Amoeba-like':
       return G(['size', 0.8], ['flex', 1.0], ['lobe', 1.0], ['nucleus', 1.4], ['mito', 2], ['vacuole', 0.2], ['cvac', 1],
         ['mouth', 1.0], ['hue', 0.47], ['growth', 0.5]);
     case 'Yeast-like':
-      return G(['size', 0.7], ['elong', 0.2], ['wall', 1.0], ['nucleus', 1.6], ['mito', 6], ['vacuole', 0.55], ['hue', 0.09], ['growth', 0.5]);
+      return G(['size', 0.7], ['elong', 0.2], ['wall', 0.5], ['nucleus', 1.6], ['mito', 4], ['vacuole', 0.3], ['hue', 0.09], ['growth', 0.5]);
     case 'Cyanobacterium':
       return G(['size', 0.3], ['elong', 0.5], ['box', 0.8], ['wall', 0.5], ['chloro', 3], ['hue', 0.45], ['growth', 0.5]);
     case 'Proto-cell':

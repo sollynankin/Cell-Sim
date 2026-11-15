@@ -4,6 +4,7 @@ import { drawCell, drawPortrait, drawSimple } from './cellart.js';
 import { drawDNA, dnaLegend, describeGene, orderGenes } from './dna.js';
 import { partsOf, GENE_INFO } from './info.js';
 import { makeChart } from './charts.js';
+import { createDesigner, loadLibrary, genomeFromDesign } from './designer.js';
 
 const $ = (id) => document.getElementById(id);
 const sim = new Sim({ seed: (Math.random() * 1e9) | 0, mode: 'mixed' });
@@ -83,9 +84,17 @@ for (const k of ['light', 'nutrient', 'hypo', 'mutation']) {
 const speed = $('speed'); speed.oninput = () => { $('v-speed').textContent = speed.value + 'x'; }; speed.oninput();
 $('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'Resume' : 'Pause'; };
 $('reset').onclick = () => { sim.seed = (Math.random() * 1e9) | 0; sim.reset($('mode').value); selected = null; renderStatic(); };
-const inoc = $('inoc'); ARCHETYPES.forEach((n) => { const o = document.createElement('option'); o.textContent = n; inoc.append(o); });
+const inoc = $('inoc');
+function fillInoc(lib = loadLibrary()) {
+  const keep = inoc.value; inoc.innerHTML = '';
+  ARCHETYPES.forEach((n) => { const o = document.createElement('option'); o.textContent = n; o.value = n; inoc.append(o); });
+  lib.forEach((d, i) => { const o = document.createElement('option'); o.textContent = '★ ' + d.name; o.value = 'lib:' + i; inoc.append(o); });
+  if ([...inoc.options].some((o) => o.value === keep)) inoc.value = keep;
+}
+fillInoc();
 $('add').onclick = () => {
-  for (let i = 0; i < 12; i++) sim.spawn(archetype(inoc.value), null, clamp(cam.x + (Math.random() - 0.5) * 200, 20, sim.W - 20), clamp(cam.y + (Math.random() - 0.5) * 200, 20, sim.H - 20));
+  const lib = inoc.value.startsWith('lib:') ? loadLibrary()[+inoc.value.slice(4)] : null;
+  for (let i = 0; i < 12; i++) { const c = sim.spawn(lib ? genomeFromDesign(lib) : archetype(inoc.value), null, clamp(cam.x + (Math.random() - 0.5) * 200, 20, sim.W - 20), clamp(cam.y + (Math.random() - 0.5) * 200, 20, sim.H - 20)); if (lib) c.label = lib.name; }
 };
 let eventTimer = 0, savedLight = 1, savedMut = 0;
 $('dark').onclick = () => { savedLight = sim.params.light; sim.params.light = 0; $('light').value = 0; $('v-light').textContent = '0.00'; eventTimer = Math.max(eventTimer, 1500); sim._restore = () => { sim.params.light = savedLight; $('light').value = savedLight; $('v-light').textContent = savedLight.toFixed(2); }; };
@@ -269,7 +278,7 @@ function renderStatic() {
     $('tab-vitals').innerHTML = '<div class="hint">Select a cell to see its vital signs.</div>'; $('tab-family').innerHTML = '<div class="hint">Select a cell to see its family.</div>'; $('energy').innerHTML = '';
     drawDNAView(); return;
   }
-  $('selname').textContent = `#${c.id} · gen ${c.gen}`;
+  $('selname').textContent = `#${c.id} · gen ${c.gen}` + (c.label ? ` · ${c.label}` : '');
   $('desc').textContent = describe(c.P).replace(/^./, (m) => m.toUpperCase());
   const maxv = Math.max(1, ...c.g.map((q) => q.v * q.x));
   $('genes').innerHTML = [...c.g].sort((a, b) => a.k.localeCompare(b.k) || b.v - a.v).map((q) => `<div class="gene" data-k="${q.k}" title="${GENE_INFO[q.k] || ''}"><span>${q.k}</span><i style="width:${Math.min(100, (q.v * q.x / maxv) * 100)}%"></i><span>${q.v.toFixed(2)} × ${q.x.toFixed(2)}</span></div>`).join('');
@@ -312,7 +321,7 @@ function refreshTabs(force) {
   }
   if (tab === 'energy' || force) {
     const o = {}; const gi = sim.gi(c.x, c.y), L = sim.light(c.x, c.y) * (sim.shade ? sim.shade[gi] : 1);
-    sim.ledger(c, sim.nut[gi], L, o);
+    sim.ledger(c, sim.nut[gi], L, o, sim.shadeA ? sim.shadeA[gi] : 0);
     const costs = Object.entries(o.items).filter(([, v]) => v > 1e-6).sort((a, b) => b[1] - a[1]);
     const totalCost = costs.reduce((a, [, v]) => a + v, 0), income = o.up + o.photo, mx = Math.max(income, totalCost, 1e-6);
     $('energy').innerHTML = `<h4 style="margin-top:2px">Income now (per tick ×1000)</h4>${item('Light (photosynthesis)', o.photo, mx, '#fde047')}${item('Dissolved nutrients', o.up, mx, '#fb923c')}
@@ -490,3 +499,9 @@ $('ch-collapse').onclick = () => { for (const id of DEFAULT_ORDER) { layout.min[
 $('ch-expandall').onclick = () => { layout.min = {}; saveLayout(); applyLayout(); };
 $('ch-reset').onclick = () => { layout = { order: DEFAULT_ORDER.slice(), min: {}, big: {} }; saveLayout(); applyLayout(); };
 applyLayout();
+
+
+// ---------------------------------------------------------------- cell designer
+const designer = createDesigner({ sim, cam: () => cam, onLibrary: (lib) => fillInoc(lib), onAdded: () => { census(); } });
+$('open-designer').onclick = () => designer.open();
+$('in-design').onclick = () => { if (selected) designer.open(selected.g, (selected.label || 'Evolved cell #' + selected.id) + ' (edit)'); };

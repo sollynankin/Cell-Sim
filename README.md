@@ -50,3 +50,28 @@ runs a headless smoke test, builds, and deploys `dist/` on every push to `main`.
 
 One-time setup in the repo on GitHub: **Settings > Pages > Build and deployment > Source: GitHub Actions**.
 The site then lives at `https://<user>.github.io/<repo>/`. Any other static host works too: upload the contents of `dist/`.
+
+## Designing your own cell
+Click **Design your own cell...** (or the pencil button in the inspector to start from a cell that evolved). The designer is a DNA editor:
+add, delete and retune individual genes (amplitude = strength, expression multiplies it), load any template, or start blank.
+The portrait, helix and an energy-budget check update live ("can it make a living?" at a vent, in mid-water and near the surface,
+with the number of ticks per generation), plus warnings about things that will not work (for example mitochondria without a nucleus).
+Save designs to a browser-local library (they appear with a star in the Inoculate list), copy or paste them as JSON, and add 1 to 100 copies
+to the pool at the camera, the vents, the surface or everywhere. A designed cell is an ordinary cell: its descendants keep its name but mutate
+and compete like everything else.
+
+## Balance notes
+`npm test` runs `test.mjs` (also in CI before every deploy): genomes develop, each starting genome can make a living somewhere, primordial and mixed
+runs survive without extinction or hitting the population cap, evolve new structures, and replay deterministically for a seed.
+
+Tuning history, from a 4-seed x 60k-tick primordial run that originally stayed a featureless soup:
+- Cheaper division (birth biomass 4 x area) and 1.8x vent inflow, so generations take ~1,500 ticks.
+- Any swimmer follows nutrient gradients weakly, so a lone flagellum pays off without a separate sense gene.
+- Warm plumes carry nutrients upward, opening a lit niche; light is shaded by the cells above and crowding adds a waste cost, which keeps populations
+  around 150-600 instead of the cap.
+- Big cells without a nucleus pay an internal-transport penalty, which is what rewards evolving a nucleus; complexity costs (per-gene, nucleus,
+  mitochondria) are high enough that it must pay for itself.
+- Starting genomes were rebalanced so no template earns 5-10x the energy of the others.
+
+What to expect from scratch: flagella and walls within ~4,000 ticks, cilia and photosynthesis within roughly 15,000 to 70,000 (not in every seed;
+some stay vent-bound bacteria), then diverse body plans. Eukaryotes and predators from a primordial start are rare and slow; the mixed start has them from tick 0.

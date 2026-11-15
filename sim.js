@@ -5,9 +5,9 @@
 import { mulberry32, clamp, develop, mutate, archetype, cloneGenome, describe } from './genome.js';
 
 // Tunable physics constants (energy units per tick). Calibrated so simple cells are viable.
-export const K = { uptake: 0.022, photo: 0.035, base: 0.005, gene: 0.0002, nucleus: 0.012, mito: 0.004, golgi: 0.002, er: 0.003,
+export const K = { uptake: 0.022, photo: 0.03, base: 0.005, gene: 0.0004, nucleus: 0.006, mito: 0.0035, golgi: 0.002, er: 0.003,
   plastid: 0.002, thyl: 0.002, vac: 0.002, cvac: 0.002, eye: 0.001, sense: 0.003, pili: 0.002, wall: 0.0006, cilia: 0.0015,
-  mouth: 0.0008, move: 0.0015, flag: 0.001 };
+  mouth: 0.0008, move: 0.0015, flag: 0.001, transport: 0.02, rise: 0.05, crowd: 0.003, crowdFree: 5 };
 export const U = 16;                                   // pixels per body-length unit
 
 const TWO_PI = Math.PI * 2;
@@ -17,7 +17,7 @@ export class Cell {
     this.id = id; this.g = genome; this.P = develop(genome);
     this.x = x; this.y = y; this.ang = Math.random() * TWO_PI; this.vx = 0; this.vy = 0;
     this.parent = parent ? parent.id : 0; this.gen = parent ? parent.gen + 1 : 0; this.lin = parent ? parent.lin : id;
-    this.anc = []; this.age = 0; this.kids = 0; this.kills = 0; this.fv = 0; this.divT = 0; this.muts = [];
+    this.label = parent ? (parent.label || '') : ''; this.anc = []; this.age = 0; this.kids = 0; this.kills = 0; this.fv = 0; this.divT = 0; this.muts = [];
     this.alive = true; this.cause = '';
     this.setScale();
   }
@@ -25,7 +25,7 @@ export class Cell {
     const P = this.P;
     this.area = Math.PI * P.a * P.b;                                     // body area in unit^2
     this.perim = TWO_PI * Math.sqrt((P.a * P.a + P.b * P.b) / 2) * (P.lobe > 0.1 ? 1 + 0.6 * P.lobe : 1);
-    this.B0 = 6 * this.area;                                              // birth biomass (energy units)
+    this.B0 = 4 * this.area;                                              // birth biomass (energy units)
     this.B = this.B0 * 1.0; this.energy = this.B0 * 0.5;
     this.sc = 1;
     // locomotion drive derived from the machinery the cell actually has
@@ -44,7 +44,7 @@ export class Sim {
   constructor(opts = {}) {
     this.W = opts.W || 1800; this.H = opts.H || 1100;
     this.gw = Math.round(this.W / 20); this.gh = Math.round(this.H / 20);
-    this.params = { light: 1, nutrient: 1, hypo: 0.35, mutation: 0.04, maxPop: 900, ...opts.params };
+    this.params = { light: 1, nutrient: 1, hypo: 0.4, mutation: 0.05, maxPop: 900, ...opts.params };
     this.seed = opts.seed ?? 1; this.reset(opts.mode || 'mixed');
   }
 
@@ -92,7 +92,10 @@ export class Sim {
       nut2[i] = c + D * (l + r + u + d - 4 * c);
     }
     this.nut = nut2; this.nut2 = nut;
-    const infl = 0.09 * this.params.nutrient;
+    // warm plumes: dissolved nutrients drift upward from the vents, so food (and a reason to climb toward light) exists higher up
+    const nn = this.nut, rise = K.rise;
+    for (let y = 0; y < gh - 1; y++) for (let x = 0; x < gw; x++) { const m = nn[(y + 1) * gw + x] * rise; nn[y * gw + x] += m; nn[(y + 1) * gw + x] -= m; }
+    const infl = 0.16 * this.params.nutrient;
     for (const v of this.vents) {                                           // hydrothermal-style vents feed the bottom
       for (let k = -1; k <= 1; k++) { const i = this.gi(v.x + k * 20, v.y); this.nut[i] = Math.min(1, this.nut[i] + infl); }
     }
@@ -102,7 +105,7 @@ export class Sim {
 
   // Energy ledger for one cell at given local nutrient and light. Everything derives from the phenotype.
   // Pass `out` to also receive an itemised breakdown (used by the inspector; the hot path allocates nothing extra).
-  ledger(c, nutL, L, out) {
+  ledger(c, nutL, L, out, crowdArea = 0) {
     const P = c.P, sc = c.sc, S = c.perim * sc, A = c.area * sc * sc;
     const perm = 1 / (1 + 0.7 * P.wall);
     const eff = 0.55 + 0.4 * (1 - Math.exp(-0.45 * P.mito));                 // mitochondria extract more per nutrient
@@ -114,14 +117,16 @@ export class Sim {
     const nucleus = P.euk ? K.nucleus : 0, mito = K.mito * P.mito, golgi = K.golgi * P.golgi, er = K.er * P.er;
     const plastid = K.plastid * P.plastids + K.thyl * P.thylakoid * A, vac = K.vac * P.vacuole, cvac = K.cvac * P.cvac;
     const senses = K.eye * P.eye + K.sense * P.sense + K.pili * P.pili;
+    const transport = P.euk ? 0 : K.transport * Math.pow(Math.max(0, P.size - 1.05), 2) * A;   // big cells without a nucleus cannot move materials around fast enough
     const wall = K.wall * P.wall * S, cilia = K.cilia * P.cilia * S, mouth = K.mouth * P.mouth * A;
+    const crowd = K.crowd * Math.max(0, crowdArea - K.crowdFree);         // waste and competition when many cells share a patch of water
     const moving = c.thrust > 0.05;
     const move = moving ? K.move * c.thrust * c.thrust + K.flag * P.flagella.length : 0;
-    const cost = base + genes + nucleus + mito + golgi + er + plastid + vac + cvac + senses + wall + cilia + mouth + move;
+    const cost = base + genes + nucleus + mito + golgi + er + plastid + vac + cvac + senses + wall + cilia + mouth + move + transport + crowd;
     if (out) {
       out.up = up; out.photo = photo; out.cap = cap; out.eff = eff;
       out.items = { 'Basic upkeep (size)': base, 'DNA maintenance': genes, 'Nucleus': nucleus, 'Mitochondria': mito, 'Golgi + ER': golgi + er, 'Chloroplasts / thylakoids': plastid,
-        'Vacuoles': vac, 'Contractile vacuole pumps': cvac + (P.cvac ? 0.004 * P.cvac * this.params.hypo : 0), 'Senses and pili': senses, 'Cell wall': wall, 'Cilia': cilia, 'Mouth': mouth, 'Swimming': move };
+        'Vacuoles': vac, 'Contractile vacuole pumps': cvac + (P.cvac ? 0.004 * P.cvac * this.params.hypo : 0), 'Senses and pili': senses, 'Internal transport (no nucleus)': transport, 'Crowding (waste, competition)': crowd, 'Cell wall': wall, 'Cilia': cilia, 'Mouth': mouth, 'Swimming': move };
     }
     return { up, photo, cost, cap, eff, moving };
   }
@@ -152,7 +157,7 @@ export class Sim {
       const sh = this.shade || (this.shade = new Float32Array(gw * gh));
       for (let x = 0; x < gw; x++) {
         let cum = 0;
-        for (let y = 0; y < gh; y++) { const i = y * gw + x; sh[i] = Math.exp(-0.05 * cum); cum += area[i] + 0.3 * (area[i - (x > 0 ? 1 : 0)] + area[i + (x < gw - 1 ? 1 : 0)]); }
+        for (let y = 0; y < gh; y++) { const i = y * gw + x; sh[i] = Math.exp(-0.32 * cum); cum += area[i] + 0.3 * (area[i - (x > 0 ? 1 : 0)] + area[i + (x < gw - 1 ? 1 : 0)]); }
       }
     }
     const newborn = [];
@@ -163,7 +168,7 @@ export class Sim {
       const sc = c.sc, S = c.perim * sc, A = c.area * sc * sc;
       const gi = this.gi(c.x, c.y), nutL = this.nut[gi];
       const L = this.light(c.x, c.y) * (this.shade ? this.shade[gi] : 1);
-      const led = this.ledger(c, nutL, L);
+      const led = this.ledger(c, nutL, L, null, this.shadeA ? this.shadeA[gi] : 0);
       this.nut[gi] -= led.up / 6;
       let gain = led.up + led.photo, cost = led.cost;
       this.flow.uptake += led.up; this.flow.photo += led.photo;
@@ -175,7 +180,8 @@ export class Sim {
       if (stress > 0.15 && rng() < 0.01 * stress * stress) { this.kill(c, 'lysed'); continue; }
       // ------ steering and motion ------
       let tx = 0, ty = 0, have = false;
-      if (P.sense > 0.02) {
+      const senseEff = P.sense > 0.02 ? P.sense : (moving ? 0.3 : 0);        // any swimmer follows gradients weakly; the sense gene sharpens it
+      if (senseEff > 0.02) {
         // photo-sensing cells climb the light gradient, others climb nutrients
         if (P.eye > 0.25 && cap > 0.05) { tx = 0; ty = -1; have = L < 0.85; }
         else {
@@ -193,7 +199,7 @@ export class Sim {
       }
       if (have) {
         const want = Math.atan2(ty, tx); let d = want - c.ang; d = Math.atan2(Math.sin(d), Math.cos(d));
-        c.ang += clamp(d, -0.14, 0.14) * Math.min(1, 0.3 + P.sense);
+        c.ang += clamp(d, -0.14, 0.14) * Math.min(1, 0.3 + Math.max(P.sense, senseEff));
       } else c.ang += (rng() - 0.5) * 0.35;
       const sp = (moving ? c.thrust / c.drag : 0);
       const dBrown = Math.sqrt(2 * (0.18 / c.drag));
@@ -208,7 +214,7 @@ export class Sim {
         if (d < c.r + preyT.r * 0.4) {
           const p = (P.mouth * (0.5 + 0.5 * P.flex + 0.3 * P.cilia)) / (1 + 2.2 * preyT.P.wall);
           if (rng() < p) {
-            const e = preyT.B * 0.8 * eff;
+            const e = preyT.B * 1.2 * eff;
             gain += e; this.flow.prey += e; c.fv = Math.min(4, c.fv + 1); c.kills++;
             this.kill(preyT, 'eaten');
           }
@@ -287,7 +293,7 @@ export class Sim {
     this.hist.push({
       t: this.tick, n: cs.length,
       euk: f((c) => c.P.euk), photo: f((c) => c.P.plastids || c.P.thylakoid > 0.3), flag: f((c) => c.P.flagella.length > 0),
-      cilia: f((c) => c.P.cilia > 0.3), wall: f((c) => c.P.wall > 0.5), mouth: f((c) => c.P.mouth > 0.3), amoeba: f((c) => c.P.lobe > 0.3),
+      cilia: f((c) => c.P.cilia > 0.3), wall: f((c) => c.P.wall > 0.15), mouth: f((c) => c.P.mouth > 0.3), amoeba: f((c) => c.P.lobe > 0.3),
       size: cs.reduce((s, c) => s + c.P.size, 0) / n, genes: cs.reduce((s, c) => s + c.P.genes, 0) / n,
       // energy sources this window (share of all income) and demography
       srcLight: fl.photo / inc, srcNut: fl.uptake / inc, srcPrey: fl.prey / inc,

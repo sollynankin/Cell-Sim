@@ -6,12 +6,12 @@ const pct = (x) => Math.round(x * 100) + '%';
 export const PARTS = [
   { name: 'Nucleus', labels: ['Nucleus', 'Macronucleus'], color: '#a855f7', has: (P) => P.euk,
     level: (P) => 'present',
-    what: 'Membrane-bound compartment that holds the DNA. Its presence unlocks the other eukaryote organelles (mitochondria, chloroplasts, Golgi, ER).',
+    what: 'Membrane-bound compartment that holds the DNA. Unlocks the other eukaryote organelles (mitochondria, chloroplasts, Golgi, ER) and removes the internal-transport penalty that limits how big a nucleus-less cell can get.',
     cost: 'Constant upkeep every tick, so it only pays off when the organelles it unlocks earn their keep.' },
   { name: 'Nucleoid (no nucleus)', labels: ['Nucleoid (DNA)', 'Ribosomes'], color: '#818cf8', has: (P) => !P.euk,
     level: () => 'bare DNA',
     what: 'DNA floats freely in the cytoplasm. Cheap and fast, but this cell cannot build mitochondria, Golgi or true chloroplasts.',
-    cost: 'None. This is the low-cost design.' },
+    cost: (P) => P.size > 1.05 ? 'This cell is big enough to pay an internal-transport penalty that a nucleus would remove.' : 'None while small. Above size ~1.05 an internal-transport penalty grows, which is what pushes large cells to evolve a nucleus.' },
   { name: 'Mitochondria', labels: ['Mitochondrion'], color: '#fb7185', has: (P) => P.mito > 0,
     level: (P) => P.mito + (P.mito === 1 ? ' organelle' : ' organelles'),
     what: (P) => `Power plants. They raise how much energy the cell extracts from nutrients and prey to ${pct(0.55 + 0.4 * (1 - Math.exp(-0.45 * P.mito)))} (a cell with none gets 55%).`,
@@ -62,11 +62,11 @@ export const PARTS = [
     cost: 'Tiny upkeep.' },
   { name: 'Mouth / phagocytosis', labels: ['Oral groove', 'Food vacuole'], color: '#f43f5e', has: (P) => P.mouth > 0.3,
     level: (P) => pct(P.mouth),
-    what: 'Engulfs other cells smaller than about half its own size and digests them, taking 80% of their biomass. Walled prey are much harder to catch.',
+    what: 'Engulfs other cells smaller than about half its own size and digests them, gaining roughly their biomass (more with mitochondria). Walled prey are much harder to catch.',
     cost: 'Upkeep grows with cell area.' },
   { name: 'Sensing', color: '#c084fc', has: (P) => P.sense > 0.05,
     level: (P) => pct(Math.min(1, P.sense)),
-    what: 'Lets the cell steer: toward prey, up nutrient gradients, or up toward light. Without it a cell just drifts and wanders.',
+    what: 'Sharpens steering: toward prey, up nutrient gradients, or up toward light. Without it a swimming cell still follows nutrient gradients weakly, and a non-swimmer just drifts.',
     cost: 'Small upkeep.' },
   { name: 'Pseudopods', color: '#34d399', has: (P) => P.lobe > 0.1,
     level: (P) => pct(P.lobe),
@@ -82,7 +82,7 @@ export function partsOf(P) {
   P.flagellaCount = P.flagella.length;
   return PARTS.filter((p) => p.has(P)).map((p) => ({
     name: p.name, labels: p.labels || [], color: p.color, level: p.level(P),
-    what: typeof p.what === 'function' ? p.what(P) : p.what, cost: p.cost,
+    what: typeof p.what === 'function' ? p.what(P) : p.what, cost: typeof p.cost === 'function' ? p.cost(P) : p.cost,
   }));
 }
 
